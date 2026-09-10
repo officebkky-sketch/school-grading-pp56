@@ -505,14 +505,19 @@ export class StudentSyncService {
         .select('*');
       if (tErr) throw tErr;
 
-      // 2. ดึง duties ประเภทครูประจำชั้น
-      const { data: duties, error: dErr } = await supabase
-        .from('teacher_duties')
-        .select('*')
-        .in('duty_type', ['ครูประจำชั้น', 'ครูประจำชั้นหลัก', 'ครูประจำชั้นร่วม', 'ครูพี่เลี้ยง']);
-      if (dErr) throw dErr;
+      // 2. ดึง duties ประเภทครูประจำชั้น (ถ้ามี)
+      let duties: any[] = [];
+      try {
+        const { data: dData } = await supabase
+          .from('teacher_duties')
+          .select('*')
+          .in('duty_type', ['ครูประจำชั้น', 'ครูประจำชั้นหลัก', 'ครูประจำชั้นร่วม', 'ครูพี่เลี้ยง']);
+        if (dData) duties = dData;
+      } catch (dErr) {
+        console.warn('Could not query teacher_duties:', dErr);
+      }
 
-      if (!duties || duties.length === 0) return null;
+      if (!teacherRows || teacherRows.length === 0) return null;
 
       // 3. ดึงข้อมูลลายเซ็นครู (signature_url) จากตาราง profiles ในระบบหลัก
       let profileRows: any[] = [];
@@ -612,9 +617,9 @@ export class StudentSyncService {
 
       // สร้าง TeacherProfile list สำหรับล็อกอินและแสดงผล
       const teachers: TeacherProfile[] = (teacherRows || []).map((t: any) => {
-        const isDirector = ((t.position || '').includes('ผู้อำนวยการ') || (t.position || '').includes('ผอ.') || (t.first_name || '').includes('เอกคณิต')) && !(t.position || '').includes('รอง');
-        const isAcademicHead = (t.position || '').includes('วิชาการ') || (t.first_name || '').includes('วัชรี');
-        const isAdmin = (t.position || '').includes('ธุรการ') || (t.position || '').includes('สารสนเทศ') || (t.first_name || '').includes('อดิศักดิ์');
+        const isDirector = ((t.position || '').includes('ผู้อำนวยการ') || (t.position || '').includes('ผอ.') || (t.first_name || '').includes('เอกคณิต') || (t.first_name || '').includes('จันทวรรณ')) && !(t.position || '').includes('รอง');
+        const isAcademicHead = (t.position || '').includes('วิชาการ') || (t.first_name || '').includes('วัชรี') || (t.first_name || '').includes('สุมาวดี');
+        const isAdmin = (t.position || '').includes('ธุรการ') || (t.position || '').includes('สารสนเทศ') || (t.first_name || '').includes('อดิศักดิ์') || (t.first_name || '').includes('ไพโรจน์');
         const hasAllAccess = isDirector || isAcademicHead || isAdmin;
         const assigned = hasAllAccess 
           ? ['*'] 
