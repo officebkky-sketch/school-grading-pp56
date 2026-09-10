@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   roleTitle: string;
   assignedClasses: string[]; // e.g. ['ป.1'] or ['*'] for all classes
   teacherProfile?: TeacherProfile;
+  signatureUrl?: string;
 }
 
 // ตารางแมปอีเมลระบบหลัก -> ชั้นเรียนที่รับผิดชอบ
@@ -147,7 +148,8 @@ export class AuthService {
             displayName,
             role,
             roleTitle,
-            assignedClasses
+            assignedClasses,
+            signatureUrl: profile?.signature_url || undefined
           };
 
           localStorage.setItem('pp5_auth_user', JSON.stringify(authUser));
@@ -199,7 +201,8 @@ export class AuthService {
       role: teacher.role === 'director' ? 'director' : (isAcademic ? 'academic_head' : 'teacher'),
       roleTitle: teacher.roleTitle,
       assignedClasses: teacher.role === 'director' || teacher.assignedClasses.includes('*') ? ['*'] : teacher.assignedClasses,
-      teacherProfile: teacher
+      teacherProfile: teacher,
+      signatureUrl: teacher.signatureUrl
     };
 
     localStorage.setItem('pp5_auth_user', JSON.stringify(authUser));

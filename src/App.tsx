@@ -141,6 +141,33 @@ export const App: React.FC = () => {
     return localStorage.getItem('pp5_director_sig') || 'https://vzrrpxrmtjpgfbbvhjra.supabase.co/storage/v1/object/public/system/director_sig_1778032124756.png';
   });
 
+  const [classTeacherSigMap, setClassTeacherSigMap] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('pp5_class_teacher_sigs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch {}
+    }
+    return {
+      'ป.1': 'https://vzrrpxrmtjpgfbbvhjra.supabase.co/storage/v1/object/public/system/user_sig_181e17f2-e998-4c9f-a3e0-6f1334a8f7cb_1778037929138.png'
+    };
+  });
+
+  const [teacherNameSigMap, setTeacherNameSigMap] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('pp5_teacher_name_sigs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch {}
+    }
+    return {
+      'นายไพโรจน์ มากแก้ว': 'https://vzrrpxrmtjpgfbbvhjra.supabase.co/storage/v1/object/public/system/user_sig_181e17f2-e998-4c9f-a3e0-6f1334a8f7cb_1778037929138.png',
+      'นายเอกคณิต สิทธิศักดิ์': 'https://vzrrpxrmtjpgfbbvhjra.supabase.co/storage/v1/object/public/system/user_sig_b0a7a211-5962-43a1-bdeb-e9004543c9c6_1781579315885.png'
+    };
+  });
+
   // Fetch active students & homeroom assignments & school branding from Supabase (ระบบหลัก) on initial load
   useEffect(() => {
     StudentSyncService.fetchSchoolSettingsFromSupabase().then((settingsData) => {
@@ -173,6 +200,14 @@ export const App: React.FC = () => {
       if (dutyData) {
         if (dutyData.classTeacherMap && Object.keys(dutyData.classTeacherMap).length > 0) {
           setClassTeacherMap(prev => ({ ...prev, ...dutyData.classTeacherMap }));
+        }
+        if (dutyData.classTeacherSigMap && Object.keys(dutyData.classTeacherSigMap).length > 0) {
+          setClassTeacherSigMap(prev => ({ ...prev, ...dutyData.classTeacherSigMap }));
+          localStorage.setItem('pp5_class_teacher_sigs', JSON.stringify(dutyData.classTeacherSigMap));
+        }
+        if (dutyData.teacherNameSigMap && Object.keys(dutyData.teacherNameSigMap).length > 0) {
+          setTeacherNameSigMap(prev => ({ ...prev, ...dutyData.teacherNameSigMap }));
+          localStorage.setItem('pp5_teacher_name_sigs', JSON.stringify(dutyData.teacherNameSigMap));
         }
         if (dutyData.teachers && dutyData.teachers.length > 0) {
           setTeachers(dutyData.teachers);
@@ -558,6 +593,8 @@ export const App: React.FC = () => {
           directorName={config.directorName}
           directorSignatureUrl={directorSignatureUrl}
           classTeacherMap={classTeacherMap}
+          classTeacherSigMap={classTeacherSigMap}
+          teacherNameSigMap={teacherNameSigMap}
           authUser={authUser}
           announcementConfig={announcementConfig}
           onOpenAnnouncementModal={() => setIsAnnouncementModalOpen(true)}
@@ -805,6 +842,12 @@ export const App: React.FC = () => {
             config={config}
             logoUrl={schoolLogoUrl}
             directorSignatureUrl={directorSignatureUrl}
+            homeroomTeacherSignatureUrl={
+              classTeacherSigMap[config.classLevel] ||
+              teacherNameSigMap[config.homeroomTeacher] ||
+              authUser?.signatureUrl ||
+              ''
+            }
             attendanceData={attendanceStore[config.classLevel] || {}}
             holisticData={holisticStore[config.classLevel] || {}}
           />
