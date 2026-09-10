@@ -1,7 +1,7 @@
 {
   "name": "school-grading-pp56",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "ระบบวัดผลและประเมินผล ปพ.5-6 ดิจิทัล (สพฐ.)",
   "author": "โรงเรียนบ้านควนโคกยา",
   "main": "electron/main.cjs",
