@@ -347,7 +347,13 @@ export const OnlineStudentResultPortal: React.FC<Props> = ({
             <strong>{result.academicYear}</strong>
           </div>
 
-          <div className="col-span-2 sm:col-span-4 flex items-baseline gap-3 text-[11px] text-slate-600 pt-0.5 border-t border-slate-200/80">
+          <div className="col-span-2 sm:col-span-4 grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[11px] text-slate-600 pt-1 border-t border-slate-200/80">
+            <div>บิดา: <strong className="text-slate-800">{result.student.fatherName || '-'}</strong></div>
+            <div>มารดา: <strong className="text-slate-800">{result.student.motherName || '-'}</strong></div>
+            <div>ผู้ปกครอง: <strong className="text-slate-800">{result.student.guardianName || result.student.fatherName || '-'} {result.student.guardianRel ? `(${result.student.guardianRel})` : ''}</strong></div>
+          </div>
+
+          <div className="col-span-2 sm:col-span-4 flex flex-wrap items-baseline gap-3 text-[11px] text-slate-600 pt-0.5">
             <span>น้ำหนัก: <strong className="text-slate-800">{result.student.weight || '-'}</strong> กก.</span>
             <span>ส่วนสูง: <strong className="text-slate-800">{result.student.height || '-'}</strong> ซม.</span>
             <span>กลุ่มเลือด: <strong className="text-slate-800">{result.student.bloodGroup || '-'}</strong></span>

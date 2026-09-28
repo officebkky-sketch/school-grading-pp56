@@ -215,9 +215,22 @@ export const KindergartenPrintableTab: React.FC<Props> = ({
             </div>
 
             <div className="col-span-6 flex items-baseline gap-1">
-              <span className="font-bold text-slate-800 shrink-0">ชื่อบิดา-มารดา:</span>
+              <span className="font-bold text-slate-800 shrink-0">ชื่อบิดา:</span>
               <span className="border-b border-dotted border-slate-600 flex-1 text-slate-900 px-1 truncate">
-                {student.fatherName || student.motherName || student.guardianName || '-'}
+                {student.fatherName || '-'}
+              </span>
+            </div>
+            <div className="col-span-6 flex items-baseline gap-1">
+              <span className="font-bold text-slate-800 shrink-0">ชื่อมารดา:</span>
+              <span className="border-b border-dotted border-slate-600 flex-1 text-slate-900 px-1 truncate">
+                {student.motherName || '-'}
+              </span>
+            </div>
+
+            <div className="col-span-6 flex items-baseline gap-1">
+              <span className="font-bold text-slate-800 shrink-0">ชื่อผู้ปกครอง:</span>
+              <span className="border-b border-dotted border-slate-600 flex-1 text-slate-900 px-1 truncate">
+                {student.guardianName || student.fatherName || student.motherName || '-'} {student.guardianRel ? `(${student.guardianRel})` : ''}
               </span>
             </div>
             <div className="col-span-6 flex items-baseline gap-1">
