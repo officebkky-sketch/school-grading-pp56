@@ -576,7 +576,20 @@ export const App: React.FC = () => {
 
   // Current Class Subjects & Students (จัดเรียงรายวิชาพื้นฐานตามมาตรฐาน สพฐ. ท, ค, ว, ส(สังคม), ส(ประวัติศาสตร์), พ, ศ, ง, อ)
   const currentSubjects = React.useMemo(() => {
-    return sortSubjectConfigs(classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || []);
+    const raw = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
+    const seen = new Set<string>();
+    const deduped: SubjectConfig[] = [];
+    raw.forEach(s => {
+      const k = (s.code || '').replace(/\s+/g, '').toUpperCase();
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        deduped.push(s);
+      } else if (!k && !seen.has(s.id)) {
+        seen.add(s.id);
+        deduped.push(s);
+      }
+    });
+    return sortSubjectConfigs(deduped);
   }, [classSubjects, config.classLevel]);
   const currentStudents = classStudents[config.classLevel] || [];
   const currentClassScores = scoresStore[config.classLevel] || {};
@@ -622,7 +635,14 @@ export const App: React.FC = () => {
 
   const handleAddSubject = (newSub: SubjectConfig) => {
     const list = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
-    const updatedList = [...list, newSub];
+    const norm = (c: string) => (c || '').replace(/\s+/g, '').toUpperCase();
+    const existingIdx = list.findIndex(s => norm(s.code) === norm(newSub.code));
+    let updatedList: SubjectConfig[];
+    if (existingIdx >= 0) {
+      updatedList = list.map((s, idx) => idx === existingIdx ? { ...s, ...newSub, id: s.id } : s);
+    } else {
+      updatedList = [...list, newSub];
+    }
     const newState = { ...classSubjects, [config.classLevel]: updatedList };
     setClassSubjects(newState);
     localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(newState));

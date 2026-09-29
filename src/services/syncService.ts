@@ -73,22 +73,44 @@ export class CloudSyncEngine {
         if (es.id) existingMap.set(es.id, es.id);
       });
 
-      // Pre-resolve IDs before orphan detection and batch upsert
+      // Pre-resolve IDs before orphan detection and batch upsert (Strict Deduplication Guarantee)
       const oldIdMap = new Map<string, string>();
       const activeIds = new Set<string>();
       const activeNormCodes = new Set<string>();
+      const usedTargetIds = new Set<string>();
+      const dedupedSubjectsMap = new Map<string, any>(); // normCode -> subject payload row
 
-      const subjectsPayload = subjects.map(s => {
+      for (const s of subjects) {
+        const nCode = normCode(s.code);
+        if (!nCode) continue;
+
+        // ป้องกันวิชาซ้ำซ้อนในระดับชั้นเดียวกัน (Deduplicate duplicate subject code in same class)
+        if (dedupedSubjectsMap.has(nCode)) {
+          continue;
+        }
+
         const oldId = s.id;
-        let targetId = existingMap.get(s.id) || existingMap.get(normCode(s.code));
+        let targetId: string | undefined = undefined;
 
-        if (!targetId && isUuid(s.id)) {
+        // 1) Match existing DB UUID by matching s.id if not already used
+        if (s.id && existingMap.has(s.id) && !usedTargetIds.has(existingMap.get(s.id)!)) {
+          targetId = existingMap.get(s.id);
+        }
+        // 2) Match existing DB UUID by normalized code if not already used
+        else if (existingMap.has(nCode) && !usedTargetIds.has(existingMap.get(nCode)!)) {
+          targetId = existingMap.get(nCode);
+        }
+        // 3) Keep s.id if it's already a valid UUID and not already used
+        else if (isUuid(s.id) && !usedTargetIds.has(s.id)) {
           targetId = s.id;
         }
 
-        if (!targetId || !isUuid(targetId)) {
+        // 4) Otherwise generate a brand new UUID
+        if (!targetId || !isUuid(targetId) || usedTargetIds.has(targetId)) {
           targetId = generateUuid();
         }
+
+        usedTargetIds.add(targetId);
 
         if (oldId && oldId !== targetId) {
           oldIdMap.set(oldId, targetId);
@@ -97,9 +119,9 @@ export class CloudSyncEngine {
         }
 
         activeIds.add(targetId);
-        activeNormCodes.add(normCode(s.code));
+        activeNormCodes.add(nCode);
 
-        return {
+        dedupedSubjectsMap.set(nCode, {
           id: targetId,
           code: s.code.trim(),
           name: s.name.trim(),
@@ -107,8 +129,10 @@ export class CloudSyncEngine {
           credits: s.credits,
           class_level: classLevel,
           academic_year: config.academicYear
-        };
-      });
+        });
+      }
+
+      const subjectsPayload = Array.from(dedupedSubjectsMap.values());
 
       // ตรวจจับและลบวิชาที่ไม่อยู่ในรายการ subjects ของห้องนี้แล้ว (Orphaned / Deleted Subjects)
       const orphanSubjects = (dbSubjectsExisting || []).filter(es => {

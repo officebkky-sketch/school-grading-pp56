@@ -113,6 +113,13 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   const handleSaveEditSubject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSubject || !editSubName.trim() || !editSubCode.trim()) return;
+
+    const norm = (c: string) => (c || '').replace(/\s+/g, '').toUpperCase();
+    if (subjects.some(s => s.id !== selectedSubject.id && norm(s.code) === norm(editSubCode))) {
+      alert(`รหัสวิชา "${editSubCode.trim()}" มีอยู่ในระดับชั้นนี้แล้ว กรุณาใช้รหัสวิชาอื่น`);
+      return;
+    }
+
     const updated: SubjectConfig = {
       ...selectedSubject,
       code: editSubCode.trim(),
@@ -128,6 +135,12 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   const handleCreateSubject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubName.trim() || !newSubCode.trim()) return;
+
+    const norm = (c: string) => (c || '').replace(/\s+/g, '').toUpperCase();
+    if (subjects.some(s => norm(s.code) === norm(newSubCode))) {
+      alert(`รหัสวิชา "${newSubCode.trim()}" มีอยู่ในระดับชั้นนี้แล้ว กรุณาใช้รหัสวิชาอื่น หรือแก้ไขวิชาเดิม`);
+      return;
+    }
 
     const generateUuid = () =>
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
