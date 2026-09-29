@@ -13,6 +13,17 @@ export interface SyncResult {
   timestamp: string;
 }
 
+const isUuid = (val?: string): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
+const generateUuid = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      });
+
 export class CloudSyncEngine {
   /**
    * Sync a single class room's entire data to Supabase (Class-Scoped Atomic Upsert)
@@ -36,6 +47,15 @@ export class CloudSyncEngine {
       };
     }
 
+    if (!subjects || subjects.length === 0) {
+      return {
+        success: true,
+        syncedCount: 0,
+        message: 'ไม่มีรายวิชาที่ต้องซิงค์',
+        timestamp
+      };
+    }
+
     try {
       let totalSynced = 0;
 
@@ -53,10 +73,44 @@ export class CloudSyncEngine {
         if (es.id) existingMap.set(es.id, es.id);
       });
 
-      // ตรวจจับและลบวิชาที่ไม่อยู่ในรายการ subjects ของห้องนี้แล้ว (Orphaned / Deleted Subjects)
-      const activeNormCodes = new Set(subjects.map(s => normCode(s.code)));
-      const activeIds = new Set(subjects.map(s => s.id));
+      // Pre-resolve IDs before orphan detection and batch upsert
+      const oldIdMap = new Map<string, string>();
+      const activeIds = new Set<string>();
+      const activeNormCodes = new Set<string>();
 
+      const subjectsPayload = subjects.map(s => {
+        const oldId = s.id;
+        let targetId = existingMap.get(s.id) || existingMap.get(normCode(s.code));
+
+        if (!targetId && isUuid(s.id)) {
+          targetId = s.id;
+        }
+
+        if (!targetId || !isUuid(targetId)) {
+          targetId = generateUuid();
+        }
+
+        if (oldId && oldId !== targetId) {
+          oldIdMap.set(oldId, targetId);
+          oldIdMap.set(targetId, oldId);
+          s.id = targetId;
+        }
+
+        activeIds.add(targetId);
+        activeNormCodes.add(normCode(s.code));
+
+        return {
+          id: targetId,
+          code: s.code.trim(),
+          name: s.name.trim(),
+          type: s.type,
+          credits: s.credits,
+          class_level: classLevel,
+          academic_year: config.academicYear
+        };
+      });
+
+      // ตรวจจับและลบวิชาที่ไม่อยู่ในรายการ subjects ของห้องนี้แล้ว (Orphaned / Deleted Subjects)
       const orphanSubjects = (dbSubjectsExisting || []).filter(es => {
         const esNorm = normCode(es.code);
         return !activeNormCodes.has(esNorm) && !activeIds.has(es.id);
@@ -78,29 +132,12 @@ export class CloudSyncEngine {
           .in('id', orphanIds);
       }
 
-      const subjectsPayload = subjects.map(s => {
-        const existingId = existingMap.get(normCode(s.code)) || existingMap.get(s.id);
-        const row: any = {
-          code: s.code.trim(),
-          name: s.name.trim(),
-          type: s.type,
-          credits: s.credits,
-          class_level: classLevel,
-          academic_year: config.academicYear
-        };
-        if (existingId) row.id = existingId;
-        return row;
-      });
-
       if (subjectsPayload.length > 0) {
         const { error: subErr } = await supabase
           .from('subjects')
           .upsert(subjectsPayload, { onConflict: 'id' });
         if (subErr) {
-          const { error: fallbackErr } = await supabase
-            .from('subjects')
-            .upsert(subjectsPayload);
-          if (fallbackErr) throw new Error(`ไม่สามารถซิงค์รายวิชา: ${fallbackErr.message}`);
+          throw new Error(`ไม่สามารถซิงค์รายวิชา: ${subErr.message}`);
         }
       }
 
@@ -122,10 +159,15 @@ export class CloudSyncEngine {
       // 2. Sync Student Grades
       const gradesPayload: any[] = [];
       for (const sub of subjects) {
-        const subDbId = subjectIdMap.get(normCode(sub.code)) || subjectIdMap.get(sub.id);
+        const subDbId = subjectIdMap.get(normCode(sub.code)) || subjectIdMap.get(sub.id) || sub.id;
         if (!subDbId) continue;
 
-        const subScores = scores[sub.id] || scores[subDbId] || {};
+        const subScores =
+          scores[sub.id] ||
+          scores[subDbId] ||
+          (oldIdMap.get(sub.id) ? scores[oldIdMap.get(sub.id)!] : undefined) ||
+          (oldIdMap.get(subDbId) ? scores[oldIdMap.get(subDbId)!] : undefined) ||
+          {};
         for (const s of students) {
           const rec = subScores[s.studentId];
           if (!rec) continue;
@@ -736,9 +778,13 @@ export class CloudSyncEngine {
               .upsert(item.payload, { onConflict: 'student_id,academic_year,semester' });
             if (error) throw error;
           } else if (item.entity === 'subjects' && Array.isArray(item.payload)) {
+            const sanitized = item.payload.map((p: any) => ({
+              ...p,
+              id: isUuid(p.id) ? p.id : generateUuid()
+            }));
             const { error } = await supabase
               .from('subjects')
-              .upsert(item.payload, { onConflict: 'id' });
+              .upsert(sanitized, { onConflict: 'id' });
             if (error) throw error;
           }
 

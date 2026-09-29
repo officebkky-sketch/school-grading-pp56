@@ -128,8 +128,17 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   const handleCreateSubject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubName.trim() || !newSubCode.trim()) return;
+
+    const generateUuid = () =>
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = (Math.random() * 16) | 0;
+            return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+          });
+
     const newSubject: SubjectConfig = {
-      id: 'sub_' + Date.now(),
+      id: generateUuid(),
       code: newSubCode.trim(),
       name: newSubName.trim(),
       type: newSubType,

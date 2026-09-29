@@ -372,7 +372,7 @@ export const App: React.FC = () => {
 
   // Dynamic Subjects per Class
   const [classSubjects, setClassSubjects] = useState<Record<string, SubjectConfig[]>>(() => {
-    const saved = localStorage.getItem('pp5_class_subjects');
+    const saved = localStorage.getItem('pp5_class_subjects_2569') || localStorage.getItem('pp5_class_subjects');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -392,6 +392,16 @@ export const App: React.FC = () => {
   // Rehydrate scores & subjects from cloud whenever academicYear changes
   useEffect(() => {
     // 1. ลองโหลดจาก Local Cache ประจำปีการศึกษาก่อนเพื่อความรวดเร็ว (Instant UI)
+    const cachedYearSubjects = localStorage.getItem(`pp5_class_subjects_${config.academicYear}`) || localStorage.getItem('pp5_class_subjects');
+    if (cachedYearSubjects) {
+      try {
+        const parsed = JSON.parse(cachedYearSubjects);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          setClassSubjects(prev => ({ ...CLASS_SUBJECTS_MAP, ...prev, ...parsed }));
+        }
+      } catch {}
+    }
+
     const cachedYearScores = localStorage.getItem(`pp5_scores_${config.academicYear}`);
     if (cachedYearScores) {
       try {
@@ -524,8 +534,9 @@ export const App: React.FC = () => {
   }, [scoresStore]);
 
   useEffect(() => {
+    localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(classSubjects));
     localStorage.setItem('pp5_class_subjects', JSON.stringify(classSubjects));
-  }, [classSubjects]);
+  }, [classSubjects, config.academicYear]);
 
   useEffect(() => {
     localStorage.setItem('pp5_class_teachers', JSON.stringify(classTeacherMap));
@@ -629,21 +640,18 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateSubject = (updatedSub: SubjectConfig) => {
-    setClassSubjects(prev => {
-      const list = prev[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
-      const updatedList = list.map(s => s.id === updatedSub.id ? updatedSub : s);
-      const newState = { ...prev, [config.classLevel]: updatedList };
-      localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(newState));
-      localStorage.setItem('pp5_class_subjects', JSON.stringify(newState));
-      return newState;
-    });
+    const list = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
+    const updatedList = list.map(s => s.id === updatedSub.id ? updatedSub : s);
+    const newState = { ...classSubjects, [config.classLevel]: updatedList };
+    setClassSubjects(newState);
+    localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(newState));
+    localStorage.setItem('pp5_class_subjects', JSON.stringify(newState));
 
-    const currentSubs = (classSubjects[config.classLevel] || []).map(s => s.id === updatedSub.id ? updatedSub : s);
     const currentStudents = classStudents[config.classLevel] || [];
     const currentClassScores = scoresStore[config.classLevel] || {};
     CloudSyncEngine.autoSyncClassToCloud(
       config.classLevel,
-      currentSubs,
+      updatedList,
       currentStudents,
       currentClassScores,
       config
