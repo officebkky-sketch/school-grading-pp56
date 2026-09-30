@@ -119,6 +119,10 @@ export interface AttendanceDetail {
   leave: number;
   sick: number;
   absent: number;
+  late?: number;
+  dailyRecords?: Record<string, 'present' | 'leave' | 'sick' | 'absent' | 'late'>;
+  monthlyRecords?: Record<string, Record<number, 'present' | 'leave' | 'sick' | 'absent' | 'late'>>;
+  dailyNotes?: Record<string, string>;
 }
 
 export interface LearnerActivityRecord {
@@ -134,11 +138,13 @@ export interface LearnerActivityRecord {
 }
 
 export interface HolisticDetail {
-  traitsScore: number;       // 0-3
-  competencyScore: number;   // 0-3
-  readingWriting: 'ดีเยี่ยม' | 'ดี' | 'ผ่าน' | 'ไม่ผ่าน';
+  traitsScore: number;       // 0-3 (สรุปผลเฉลี่ยคุณลักษณะ 8 ข้อ)
+  competencyScore: number;   // 0-3 (สมรรถนะสำคัญ 5 ด้าน)
+  readingWriting: 'ดีเยี่ยม' | 'ดี' | 'ผ่าน' | 'ไม่ผ่าน'; // สรุปผลอ่านคิดวิเคราะห์ 5 ข้อ
   activityPassed: boolean;
   activities?: LearnerActivityRecord; // กิจกรรมพัฒนาผู้เรียน 4 กิจกรรม (ตาม ปพ.1/ปพ.5/ปพ.6)
+  attributeScores?: number[]; // คะแนนคุณลักษณะอันพึงประสงค์ 8 ข้อ [ข้อ 1 ถึง ข้อ 8] (0-3)
+  readingScores?: number[];   // คะแนนการอ่าน คิดวิเคราะห์ และเขียน 5 ข้อ [ข้อ 1 ถึง ข้อ 5] (0-3)
 }
 
 export type PrintDocumentMode = 

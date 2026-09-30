@@ -1,7 +1,7 @@
 // src/services/syncService.ts
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { localDb } from '../db/localDb';
-import { StudentProfile, SubjectConfig, StudentScoreRecord, AcademicConfig } from '../types/pp5Types';
+import { StudentProfile, SubjectConfig, StudentScoreRecord, AcademicConfig, AttendanceDetail } from '../types/pp5Types';
 import { GrowthEngine } from '../engines/growthEngine';
 import { KINDERGARTEN_STANDARDS, KindergartenStudentAssessment, QualityLevel } from '../types/kindergartenTypes';
 
@@ -34,7 +34,8 @@ export class CloudSyncEngine {
     subjects: SubjectConfig[],
     students: StudentProfile[],
     scores: Record<string, Record<string, StudentScoreRecord>>,
-    config: AcademicConfig
+    config: AcademicConfig,
+    attendanceRecords?: Record<string, AttendanceDetail>
   ): Promise<SyncResult> {
     const timestamp = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -255,6 +256,47 @@ export class CloudSyncEngine {
           .upsert(healthPayload, { onConflict: 'student_id,academic_year,semester' });
         if (healthErr) throw new Error(`ไม่สามารถซิงค์ข้อมูลสุขภาพ: ${healthErr.message}`);
         totalSynced += healthPayload.length;
+      }
+
+      // 4. Sync Attendance Summary if available
+      if (attendanceRecords && Object.keys(attendanceRecords).length > 0) {
+        const attPayload = students.map(s => {
+          const att = attendanceRecords[s.studentId] || { present: 200, leave: 0, sick: 0, absent: 0, late: 0 };
+          const present = Number(att.present ?? 200);
+          const leave = Number(att.leave ?? 0);
+          const sick = Number(att.sick ?? 0);
+          const absent = Number(att.absent ?? 0);
+          const late = Number(att.late ?? 0);
+          const total = present + leave + sick + absent + late || 200;
+          const percent = total > 0 ? Math.round((present / total) * 1000) / 10 : 100.0;
+
+          return {
+            student_id: s.studentId,
+            academic_year: config.academicYear,
+            semester: config.semester,
+            present_days: present,
+            leave_days: leave,
+            sick_days: sick,
+            absent_days: absent,
+            total_school_days: total,
+            attendance_percent: percent,
+            has_exam_eligibility: percent >= 80,
+            updated_at: new Date().toISOString()
+          };
+        });
+
+        if (attPayload.length > 0) {
+          try {
+            const { error: attErr } = await supabase
+              .from('student_attendance_summary')
+              .upsert(attPayload, { onConflict: 'student_id,academic_year,semester' });
+            if (!attErr) {
+              totalSynced += attPayload.length;
+            }
+          } catch (e) {
+            console.warn('Cannot sync student_attendance_summary:', e);
+          }
+        }
       }
 
       // Log successful sync locally

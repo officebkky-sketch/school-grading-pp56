@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Cloud, CloudUpload, CheckCircle2, AlertCircle, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { CloudSyncEngine, SyncResult } from '../services/syncService';
-import { StudentProfile, SubjectConfig, StudentScoreRecord, AcademicConfig } from '../types/pp5Types';
+import { StudentProfile, SubjectConfig, StudentScoreRecord, AcademicConfig, AttendanceDetail } from '../types/pp5Types';
 import { KindergartenStudentAssessment } from '../types/kindergartenTypes';
 import { isSupabaseConfigured } from '../lib/supabaseClient';
 
@@ -14,6 +14,7 @@ interface Props {
   config: AcademicConfig;
   canSync: boolean;
   kindergartenAssessments?: Record<string, KindergartenStudentAssessment>;
+  attendanceRecords?: Record<string, AttendanceDetail>;
 }
 
 export const CloudSyncBar: React.FC<Props> = ({
@@ -23,7 +24,8 @@ export const CloudSyncBar: React.FC<Props> = ({
   scores,
   config,
   canSync,
-  kindergartenAssessments
+  kindergartenAssessments,
+  attendanceRecords
 }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(() => {
@@ -58,7 +60,8 @@ export const CloudSyncBar: React.FC<Props> = ({
           subjects,
           students,
           scores,
-          config
+          config,
+          attendanceRecords
         );
 
     setIsSyncing(false);

@@ -22,6 +22,7 @@ import { GradeSummaryAnalyticsTab } from './components/GradeSummaryAnalyticsTab'
 import { HealthGrowthStudioTab } from './components/HealthGrowthStudioTab';
 import { AttendanceTrackerTab } from './components/AttendanceTrackerTab';
 import { HolisticAssessmentTab } from './components/HolisticAssessmentTab';
+import { SarDashboardTab } from './components/SarDashboardTab';
 import { PrintableStudioTab } from './components/PrintableStudioTab';
 import { KindergartenAssessmentTab } from './components/KindergartenAssessmentTab';
 import { KindergartenPrintableTab } from './components/KindergartenPrintableTab';
@@ -32,6 +33,8 @@ import { CloudSyncBar } from './components/CloudSyncBar';
 import { CloudSyncEngine } from './services/syncService';
 import { OnlineAnnouncementControlModal } from './components/OnlineAnnouncementControlModal';
 import { PortalQrModal } from './components/PortalQrModal';
+import { INITIAL_ATTENDANCE } from './data/initialAttendanceData';
+import { INITIAL_HOLISTIC } from './data/initialHolisticData';
 import { AnnouncementService, AnnouncementConfig } from './services/announcementService';
 import { CertificateVerifyPage } from './components/CertificateVerifyPage';
 import {
@@ -44,7 +47,8 @@ import {
   Printer,
   ShieldCheck,
   UserCheck,
-  Baby
+  Baby,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const AUTHENTIC_SCHOOL_LOGO_URL = 'https://vzrrpxrmtjpgfbbvhjra.supabase.co/storage/v1/object/public/system/school_logo_1779071201388.png';
@@ -131,13 +135,13 @@ export const App: React.FC = () => {
       homeroomTeacher: DEFAULT_CLASS_TEACHER_MAP['ป.1'] || 'นางสุธัญญา เทพเกื้อ',
       classLevel: 'ป.1',
       room: 1,
-      totalSchoolDaysSemester1: 100,
-      totalSchoolDaysSemester2: 100
+      totalSchoolDaysSemester1: 102,
+      totalSchoolDaysSemester2: 106
     };
   });
 
   const [activeTab, setActiveTab] = useState<
-    'roster' | 'marksheet' | 'analytics' | 'health' | 'attendance' | 'holistic' | 'print' | 'k_assessment' | 'k_print'
+    'roster' | 'marksheet' | 'analytics' | 'health' | 'attendance' | 'holistic' | 'sar' | 'print' | 'k_assessment' | 'k_print'
   >('marksheet');
 
   // บันทึกการประเมินพัฒนาการระดับปฐมวัย (อ.1 - อ.3) 12 มาตรฐาน 4 ด้าน
@@ -502,10 +506,12 @@ export const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return { ...INITIAL_ATTENDANCE, ...parsed };
+        }
       } catch {}
     }
-    return {};
+    return INITIAL_ATTENDANCE;
   });
 
   // Holistic Detail Store: classLevel -> (studentId -> HolisticDetail)
@@ -514,10 +520,12 @@ export const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return { ...INITIAL_HOLISTIC, ...parsed };
+        }
       } catch {}
     }
-    return {};
+    return INITIAL_HOLISTIC;
   });
 
   // Auto-persist state
@@ -872,6 +880,7 @@ export const App: React.FC = () => {
         { id: 'health', label: 'สุขภาพ & โภชนาการ (BMI)', icon: HeartPulse },
         { id: 'attendance', label: 'เวลาเรียน', icon: CalendarCheck },
         { id: 'holistic', label: 'คุณลักษณะ & สมรรถนะ', icon: Award },
+        { id: 'sar', label: 'รายงาน SAR', icon: FileSpreadsheet },
         { id: 'print', label: 'ศูนย์จัดพิมพ์ ปพ.5/ปพ.6', icon: Printer }
       ];
 
@@ -957,6 +966,7 @@ export const App: React.FC = () => {
         students={currentStudents}
         scores={currentClassScores}
         kindergartenAssessments={kindergartenAssessments[config.classLevel] || {}}
+        attendanceRecords={attendanceStore[config.classLevel] || {}}
         config={config}
         canSync={canEditClass}
       />
@@ -1137,6 +1147,17 @@ export const App: React.FC = () => {
             attendanceData={attendanceStore[config.classLevel] || {}}
             onUpdateAttendance={handleUpdateAttendance}
             onBulkUpdateAttendance={handleBulkUpdateAttendance}
+            onUpdateTotalDays={(sem, days) => {
+              setConfig(prev => {
+                const updated = {
+                  ...prev,
+                  [sem === 1 ? 'totalSchoolDaysSemester1' : 'totalSchoolDaysSemester2']: days
+                };
+                localStorage.setItem('pp5_config', JSON.stringify(updated));
+                return updated;
+              });
+            }}
+            canConfigureCalendar={currentTeacher?.role === 'academic_head' || currentTeacher?.role === 'director' || authUser?.role === 'admin'}
           />
         )}
 
@@ -1149,6 +1170,22 @@ export const App: React.FC = () => {
             onBulkUpdateHolistic={handleBulkUpdateHolistic}
             clubName={clubNameMap[config.classLevel] || ''}
             onUpdateClubName={handleUpdateClubName}
+          />
+        )}
+
+        {activeTab === 'sar' && (
+          <SarDashboardTab
+            students={currentStudents}
+            subjects={currentSubjects}
+            scores={scoresStore[config.classLevel] || {}}
+            attendanceData={attendanceStore[config.classLevel] || {}}
+            holisticData={holisticStore[config.classLevel] || {}}
+            classLevel={config.classLevel}
+            academicYear={config.academicYear}
+            schoolName={config.schoolName}
+            directorName={config.directorName}
+            homeroomTeacher={config.homeroomTeacher}
+            totalSchoolDays={config.totalSchoolDaysSemester1 + config.totalSchoolDaysSemester2}
           />
         )}
 
