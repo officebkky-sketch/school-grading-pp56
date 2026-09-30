@@ -20,13 +20,35 @@ import {
   Award, 
   Sparkles, 
   BookOpen, 
-  X
+  X,
+  Target,
+  AlertCircle,
+  RotateCcw,
+  Save
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { Chart, registerables } from 'chart.js';
 
 // Register Chart.js modules
 Chart.register(...registerables);
+
+export interface SarTargetsConfig {
+  obecAcademicTarget: number; // เกณฑ์เป้าหมาย สพฐ. ผลสัมฤทธิ์เกรด 3 ขึ้นไป (%)
+  attendanceTarget: number;   // ค่าเป้าหมาย ร.ร. มิติที่ 1 เวลาเรียน >= 80% (%)
+  academicTarget: number;     // ค่าเป้าหมาย ร.ร. มิติที่ 2 ผลสัมฤทธิ์เกรด 3 ขึ้นไป (%)
+  readingTarget: number;      // ค่าเป้าหมาย ร.ร. มิติที่ 3 การอ่าน คิดวิเคราะห์ฯ ระดับดีขึ้นไป (%)
+  attributesTarget: number;   // ค่าเป้าหมาย ร.ร. มิติที่ 4 คุณลักษณะอันพึงประสงค์ ระดับดีขึ้นไป (%)
+  activitiesTarget: number;   // ค่าเป้าหมาย ร.ร. มิติที่ 5 กิจกรรมพัฒนาผู้เรียนผ่านครบ (%)
+}
+
+export const DEFAULT_SAR_TARGETS: SarTargetsConfig = {
+  obecAcademicTarget: 70.0,
+  attendanceTarget: 100.0,
+  academicTarget: 70.0,
+  readingTarget: 80.0,
+  attributesTarget: 85.0,
+  activitiesTarget: 100.0
+};
 
 interface Props {
   students: StudentProfile[];
@@ -59,6 +81,41 @@ export const SarDashboardTab: React.FC<Props> = ({
   const [includeChartsInWord, setIncludeChartsInWord] = useState<boolean>(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
   const [includeChartsInPrint, setIncludeChartsInPrint] = useState<boolean>(false);
+
+  // Targets Configuration State (เกณฑ์เป้าหมาย สพฐ. และ ค่าเป้าหมายสถานศึกษา)
+  const [isTargetModalOpen, setIsTargetModalOpen] = useState<boolean>(false);
+  const [targets, setTargets] = useState<SarTargetsConfig>(() => {
+    try {
+      const saved = localStorage.getItem(`sar_targets_${academicYear}`);
+      if (saved) return { ...DEFAULT_SAR_TARGETS, ...JSON.parse(saved) };
+      const globalSaved = localStorage.getItem('sar_targets_config');
+      if (globalSaved) return { ...DEFAULT_SAR_TARGETS, ...JSON.parse(globalSaved) };
+    } catch (e) {
+      console.error('Error loading sar targets:', e);
+    }
+    return DEFAULT_SAR_TARGETS;
+  });
+  const [tempTargets, setTempTargets] = useState<SarTargetsConfig>(targets);
+
+  const handleOpenTargetModal = () => {
+    setTempTargets({ ...targets });
+    setIsTargetModalOpen(true);
+  };
+
+  const handleSaveTargets = () => {
+    setTargets(tempTargets);
+    try {
+      localStorage.setItem(`sar_targets_${academicYear}`, JSON.stringify(tempTargets));
+      localStorage.setItem('sar_targets_config', JSON.stringify(tempTargets));
+    } catch (e) {
+      console.error('Error saving sar targets:', e);
+    }
+    setIsTargetModalOpen(false);
+  };
+
+  const handleResetTargets = () => {
+    setTempTargets(DEFAULT_SAR_TARGETS);
+  };
 
   const barCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const radarCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -274,7 +331,7 @@ export const SarDashboardTab: React.FC<Props> = ({
       if (ctx) {
         const labels = gradeDistributions.map(g => g.sub.name);
         const dataValues = gradeDistributions.map(g => parseFloat(g.pctG3));
-        const targetValues = gradeDistributions.map(() => 70.0);
+        const targetValues = gradeDistributions.map(() => targets.obecAcademicTarget);
 
         barChartInstanceRef.current = new Chart(ctx, {
           type: 'bar',
@@ -284,14 +341,14 @@ export const SarDashboardTab: React.FC<Props> = ({
               {
                 label: 'ร้อยละนักเรียนที่ได้เกรด 3 ขึ้นไป (%)',
                 data: dataValues,
-                backgroundColor: dataValues.map(v => v >= 70 ? 'rgba(16, 185, 129, 0.85)' : 'rgba(239, 68, 68, 0.8)'),
-                borderColor: dataValues.map(v => v >= 70 ? 'rgb(5, 150, 105)' : 'rgb(220, 38, 38)'),
+                backgroundColor: dataValues.map(v => v >= targets.academicTarget ? 'rgba(16, 185, 129, 0.85)' : 'rgba(239, 68, 68, 0.8)'),
+                borderColor: dataValues.map(v => v >= targets.academicTarget ? 'rgb(5, 150, 105)' : 'rgb(220, 38, 38)'),
                 borderWidth: 1.5,
                 borderRadius: 6,
                 order: 2
               },
               {
-                label: 'เกณฑ์เป้าหมาย สพฐ. (70%)',
+                label: `เกณฑ์เป้าหมาย สพฐ. (${targets.obecAcademicTarget}%)`,
                 data: targetValues,
                 type: 'line',
                 borderColor: 'rgba(234, 88, 12, 0.9)',
@@ -364,7 +421,13 @@ export const SarDashboardTab: React.FC<Props> = ({
           parseFloat(overallAttrPct),
           parseFloat(overallActPct)
         ];
-        const targetData = [100.0, 70.0, 80.0, 85.0, 100.0];
+        const targetData = [
+          targets.attendanceTarget,
+          targets.academicTarget,
+          targets.readingTarget,
+          targets.attributesTarget,
+          targets.activitiesTarget
+        ];
 
         radarChartInstanceRef.current = new Chart(ctx, {
           type: 'radar',
@@ -426,25 +489,29 @@ export const SarDashboardTab: React.FC<Props> = ({
       if (barChartInstanceRef.current) barChartInstanceRef.current.destroy();
       if (radarChartInstanceRef.current) radarChartInstanceRef.current.destroy();
     };
-  }, [viewMode, gradeDistributions.length, eligiblePct, overallAcadPct, overallReadPct, overallAttrPct, overallActPct]);
+  }, [viewMode, gradeDistributions.length, eligiblePct, overallAcadPct, overallReadPct, overallAttrPct, overallActPct, targets]);
 
-  // Export Table to PNG
+  // Export Table to PNG (ใช้ html-to-image รองรับ oklch colors ของ Tailwind v4)
   const exportTableToPng = (cardId: string, filename: string) => {
     const card = document.getElementById(cardId);
     if (!card) return;
-    const buttons = card.querySelectorAll('button');
+    const buttons = card.querySelectorAll<HTMLButtonElement>('button');
     buttons.forEach(b => (b.style.visibility = 'hidden'));
 
-    html2canvas(card, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+    toPng(card, {
+      cacheBust: true,
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+    }).then(dataUrl => {
       buttons.forEach(b => (b.style.visibility = 'visible'));
       const a = document.createElement('a');
-      a.href = canvas.toDataURL('image/png');
+      a.href = dataUrl;
       a.download = `${filename}.png`;
       a.click();
     }).catch(err => {
       buttons.forEach(b => (b.style.visibility = 'visible'));
-      console.error(err);
-      alert('เกิดข้อผิดพลาดในการสร้างรูปภาพ');
+      console.error('html-to-image error:', err);
+      alert('ไม่สามารถบันทึกภาพได้\nกรุณาลองใช้ฟีเจอร์ "พิมพ์" (Ctrl+P) แล้วบันทึกเป็น PDF แทนครับ');
     });
   };
 
@@ -650,6 +717,14 @@ export const SarDashboardTab: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button 
+            onClick={handleOpenTargetModal} 
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition"
+            title="กำหนดเกณฑ์เป้าหมาย สพฐ. และค่าเป้าหมายสถานศึกษาสำหรับเล่ม SAR"
+          >
+            <Target className="w-4 h-4" />
+            <span>🎯 กำหนดค่าเป้าหมาย สพฐ. / ร.ร.</span>
+          </button>
           <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/15 text-white rounded-xl text-xs font-semibold cursor-pointer border border-white/20 transition select-none">
             <input 
               type="checkbox" 
@@ -687,9 +762,15 @@ export const SarDashboardTab: React.FC<Props> = ({
             </div>
           </div>
           <div className="text-2xl font-bold text-slate-800 font-mono mt-2">{avgAttendancePct}%</div>
-          <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (≥ 85%) • สิทธิ์สอบ {eligiblePct}%
-          </div>
+          {parseFloat(eligiblePct) >= targets.attendanceTarget ? (
+            <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (เป้า {targets.attendanceTarget}%) • สิทธิ์สอบ {eligiblePct}%
+            </div>
+          ) : (
+            <div className="text-[11px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> ต่ำกว่าเป้าหมาย (เป้า {targets.attendanceTarget}%) • สิทธิ์สอบ {eligiblePct}%
+            </div>
+          )}
         </div>
 
         {/* Academic */}
@@ -701,9 +782,15 @@ export const SarDashboardTab: React.FC<Props> = ({
             </div>
           </div>
           <div className="text-2xl font-bold text-blue-700 font-mono mt-2">{overallAcadPct}%</div>
-          <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (เป้า 70%) • รวม 9 วิชา
-          </div>
+          {parseFloat(overallAcadPct) >= targets.academicTarget ? (
+            <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (เป้า {targets.academicTarget}%) • รวม 9 วิชา
+            </div>
+          ) : (
+            <div className="text-[11px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> ต่ำกว่าเป้าหมาย (เป้า {targets.academicTarget}%) • รวม 9 วิชา
+            </div>
+          )}
         </div>
 
         {/* Attributes */}
@@ -715,9 +802,15 @@ export const SarDashboardTab: React.FC<Props> = ({
             </div>
           </div>
           <div className="text-2xl font-bold text-teal-700 font-mono mt-2">{overallAttrPct}%</div>
-          <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (เป้า 85%) • 8 ข้อ
-          </div>
+          {parseFloat(overallAttrPct) >= targets.attributesTarget ? (
+            <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (เป้า {targets.attributesTarget}%) • 8 ข้อ
+            </div>
+          ) : (
+            <div className="text-[11px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> ต่ำกว่าเป้าหมาย (เป้า {targets.attributesTarget}%) • 8 ข้อ
+            </div>
+          )}
         </div>
 
         {/* Reading */}
@@ -729,9 +822,15 @@ export const SarDashboardTab: React.FC<Props> = ({
             </div>
           </div>
           <div className="text-2xl font-bold text-purple-700 font-mono mt-2">{overallReadPct}%</div>
-          <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (เป้า 80%) • 5 ตัวชี้วัด
-          </div>
+          {parseFloat(overallReadPct) >= targets.readingTarget ? (
+            <div className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> บรรลุเป้าหมาย (เป้า {targets.readingTarget}%) • 5 ตัวชี้วัด
+            </div>
+          ) : (
+            <div className="text-[11px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> ต่ำกว่าเป้าหมาย (เป้า {targets.readingTarget}%) • 5 ตัวชี้วัด
+            </div>
+          )}
         </div>
       </div>
 
@@ -803,7 +902,7 @@ export const SarDashboardTab: React.FC<Props> = ({
                   <BarChart3 className="w-4 h-4 text-emerald-600" />
                   <span>แผนภูมิเปรียบเทียบผลสัมฤทธิ์ 9 รายวิชา (% เกรด 3 ขึ้นไป)</span>
                 </h4>
-                <p className="text-[11px] text-slate-500">เปรียบเทียบกับค่าเป้าหมายสถานศึกษา (ร้อยละ 70.0)</p>
+                <p className="text-[11px] text-slate-500">เปรียบเทียบกับเกณฑ์ สพฐ. ({targets.obecAcademicTarget.toFixed(1)}%) และค่าเป้าหมาย ร.ร. (ร้อยละ {targets.academicTarget.toFixed(1)})</p>
               </div>
               <button 
                 onClick={() => downloadChartAsPng(barCanvasRef.current, `แผนภูมิผลสัมฤทธิ์9วิชา_${classLevel}_${academicYear}`)} 
@@ -884,7 +983,7 @@ export const SarDashboardTab: React.FC<Props> = ({
                     <th className="p-2.5 text-center w-28 border-r border-slate-200">จำนวนนักเรียน (คน)</th>
                     <th className="p-2.5 text-center w-28 border-r border-slate-200">ค่าเป้าหมาย ร.ร.</th>
                     <th className="p-2.5 text-center w-32 border-r border-slate-200 bg-emerald-50 text-emerald-900">ผลการประเมินจริง</th>
-                    <th className="p-2.5 text-center w-32">การบรรลุเป้าหมาย</th>
+                    <th className="p-2.5 text-center w-36">การบรรลุเป้าหมาย</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -893,10 +992,14 @@ export const SarDashboardTab: React.FC<Props> = ({
                       1. ร้อยละของผู้เรียนที่มีเวลาเรียนไม่น้อยกว่าร้อยละ 80 (สิทธิ์สอบ ปพ.5)
                     </td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-mono font-bold text-slate-700">{totalStudents}</td>
-                    <td className="p-2.5 text-center border-r border-slate-200 font-mono text-slate-500">100.0%</td>
+                    <td className="p-2.5 text-center border-r border-slate-200 font-mono font-semibold text-slate-600">{targets.attendanceTarget.toFixed(1)}%</td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-bold font-mono text-emerald-700 bg-emerald-50/50">{eligiblePct}%</td>
-                    <td className="p-2.5 text-center font-bold text-emerald-700">
-                      <span className="inline-flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                    <td className="p-2.5 text-center font-bold">
+                      {parseFloat(eligiblePct) >= targets.attendanceTarget ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-700"><AlertCircle className="w-3.5 h-3.5 text-amber-600" /> ต่ำกว่าเป้าหมาย</span>
+                      )}
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50 transition">
@@ -904,10 +1007,14 @@ export const SarDashboardTab: React.FC<Props> = ({
                       2. ร้อยละของผู้เรียนที่มีผลสัมฤทธิ์ทางการเรียนระดับ 3 ขึ้นไป (8 กลุ่มสาระ 9 วิชา)
                     </td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-mono font-bold text-slate-700">{totalStudents}</td>
-                    <td className="p-2.5 text-center border-r border-slate-200 font-mono text-slate-500">70.0%</td>
+                    <td className="p-2.5 text-center border-r border-slate-200 font-mono font-semibold text-slate-600">{targets.academicTarget.toFixed(1)}%</td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-bold font-mono text-emerald-700 bg-emerald-50/50">{overallAcadPct}%</td>
-                    <td className="p-2.5 text-center font-bold text-emerald-700">
-                      <span className="inline-flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                    <td className="p-2.5 text-center font-bold">
+                      {parseFloat(overallAcadPct) >= targets.academicTarget ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-700"><AlertCircle className="w-3.5 h-3.5 text-amber-600" /> ต่ำกว่าเป้าหมาย</span>
+                      )}
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50 transition">
@@ -915,10 +1022,14 @@ export const SarDashboardTab: React.FC<Props> = ({
                       3. ร้อยละของผู้เรียนที่มีผลการประเมินการอ่าน คิดวิเคราะห์ฯ ระดับดีขึ้นไป
                     </td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-mono font-bold text-slate-700">{totalStudents}</td>
-                    <td className="p-2.5 text-center border-r border-slate-200 font-mono text-slate-500">80.0%</td>
+                    <td className="p-2.5 text-center border-r border-slate-200 font-mono font-semibold text-slate-600">{targets.readingTarget.toFixed(1)}%</td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-bold font-mono text-emerald-700 bg-emerald-50/50">{overallReadPct}%</td>
-                    <td className="p-2.5 text-center font-bold text-emerald-700">
-                      <span className="inline-flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                    <td className="p-2.5 text-center font-bold">
+                      {parseFloat(overallReadPct) >= targets.readingTarget ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-700"><AlertCircle className="w-3.5 h-3.5 text-amber-600" /> ต่ำกว่าเป้าหมาย</span>
+                      )}
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50 transition">
@@ -926,10 +1037,14 @@ export const SarDashboardTab: React.FC<Props> = ({
                       4. ร้อยละของผู้เรียนที่มีผลการประเมินคุณลักษณะอันพึงประสงค์ ระดับดีขึ้นไป
                     </td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-mono font-bold text-slate-700">{totalStudents}</td>
-                    <td className="p-2.5 text-center border-r border-slate-200 font-mono text-slate-500">85.0%</td>
+                    <td className="p-2.5 text-center border-r border-slate-200 font-mono font-semibold text-slate-600">{targets.attributesTarget.toFixed(1)}%</td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-bold font-mono text-emerald-700 bg-emerald-50/50">{overallAttrPct}%</td>
-                    <td className="p-2.5 text-center font-bold text-emerald-700">
-                      <span className="inline-flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                    <td className="p-2.5 text-center font-bold">
+                      {parseFloat(overallAttrPct) >= targets.attributesTarget ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-700"><AlertCircle className="w-3.5 h-3.5 text-amber-600" /> ต่ำกว่าเป้าหมาย</span>
+                      )}
                     </td>
                   </tr>
                   <tr className="hover:bg-slate-50 transition">
@@ -937,10 +1052,14 @@ export const SarDashboardTab: React.FC<Props> = ({
                       5. ร้อยละของผู้เรียนที่ผ่านเกณฑ์การประเมินกิจกรรมพัฒนาผู้เรียนครบทุกกิจกรรม
                     </td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-mono font-bold text-slate-700">{totalStudents}</td>
-                    <td className="p-2.5 text-center border-r border-slate-200 font-mono text-slate-500">100.0%</td>
+                    <td className="p-2.5 text-center border-r border-slate-200 font-mono font-semibold text-slate-600">{targets.activitiesTarget.toFixed(1)}%</td>
                     <td className="p-2.5 text-center border-r border-slate-200 font-bold font-mono text-emerald-700 bg-emerald-50/50">{overallActPct}%</td>
-                    <td className="p-2.5 text-center font-bold text-emerald-700">
-                      <span className="inline-flex items-center gap-1"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                    <td className="p-2.5 text-center font-bold">
+                      {parseFloat(overallActPct) >= targets.activitiesTarget ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700"><Check className="w-3.5 h-3.5 text-emerald-600" /> บรรลุเป้าหมาย</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-700"><AlertCircle className="w-3.5 h-3.5 text-amber-600" /> ต่ำกว่าเป้าหมาย</span>
+                      )}
                     </td>
                   </tr>
                 </tbody>
@@ -1277,37 +1396,47 @@ export const SarDashboardTab: React.FC<Props> = ({
                       <tr>
                         <td className="p-2 text-left border-r border-slate-300">๑. ร้อยละของผู้เรียนที่มีเวลาเรียนไม่น้อยกว่าร้อยละ ๘๐</td>
                         <td className="p-2 border-r border-slate-300">{totalStudents}</td>
-                        <td className="p-2 border-r border-slate-300">๑๐๐.๐%</td>
+                        <td className="p-2 border-r border-slate-300">{targets.attendanceTarget.toFixed(1)}%</td>
                         <td className="p-2 border-r border-slate-300 font-bold text-emerald-800">{eligiblePct}%</td>
-                        <td className="p-2 font-bold text-emerald-700">บรรลุเป้าหมาย</td>
+                        <td className={`p-2 font-bold ${parseFloat(eligiblePct) >= targets.attendanceTarget ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {parseFloat(eligiblePct) >= targets.attendanceTarget ? 'บรรลุเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}
+                        </td>
                       </tr>
                       <tr>
                         <td className="p-2 text-left border-r border-slate-300">๒. ร้อยละของผู้เรียนที่มีผลสัมฤทธิ์ทางการเรียนระดับ ๓ ขึ้นไป (๙ วิชา)</td>
                         <td className="p-2 border-r border-slate-300">{totalStudents}</td>
-                        <td className="p-2 border-r border-slate-300">๗๐.๐%</td>
+                        <td className="p-2 border-r border-slate-300">{targets.academicTarget.toFixed(1)}%</td>
                         <td className="p-2 border-r border-slate-300 font-bold text-emerald-800">{overallAcadPct}%</td>
-                        <td className="p-2 font-bold text-emerald-700">บรรลุเป้าหมาย</td>
+                        <td className={`p-2 font-bold ${parseFloat(overallAcadPct) >= targets.academicTarget ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {parseFloat(overallAcadPct) >= targets.academicTarget ? 'บรรลุเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}
+                        </td>
                       </tr>
                       <tr>
                         <td className="p-2 text-left border-r border-slate-300">๓. ร้อยละของผู้เรียนที่มีผลประเมินการอ่าน คิดวิเคราะห์ฯ ระดับดีขึ้นไป</td>
                         <td className="p-2 border-r border-slate-300">{totalStudents}</td>
-                        <td className="p-2 border-r border-slate-300">๘๐.๐%</td>
+                        <td className="p-2 border-r border-slate-300">{targets.readingTarget.toFixed(1)}%</td>
                         <td className="p-2 border-r border-slate-300 font-bold text-emerald-800">{overallReadPct}%</td>
-                        <td className="p-2 font-bold text-emerald-700">บรรลุเป้าหมาย</td>
+                        <td className={`p-2 font-bold ${parseFloat(overallReadPct) >= targets.readingTarget ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {parseFloat(overallReadPct) >= targets.readingTarget ? 'บรรลุเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}
+                        </td>
                       </tr>
                       <tr>
                         <td className="p-2 text-left border-r border-slate-300">๔. ร้อยละของผู้เรียนที่มีผลประเมินคุณลักษณะอันพึงประสงค์ ระดับดีขึ้นไป</td>
                         <td className="p-2 border-r border-slate-300">{totalStudents}</td>
-                        <td className="p-2 border-r border-slate-300">๘๕.๐%</td>
+                        <td className="p-2 border-r border-slate-300">{targets.attributesTarget.toFixed(1)}%</td>
                         <td className="p-2 border-r border-slate-300 font-bold text-emerald-800">{overallAttrPct}%</td>
-                        <td className="p-2 font-bold text-emerald-700">บรรลุเป้าหมาย</td>
+                        <td className={`p-2 font-bold ${parseFloat(overallAttrPct) >= targets.attributesTarget ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {parseFloat(overallAttrPct) >= targets.attributesTarget ? 'บรรลุเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}
+                        </td>
                       </tr>
                       <tr>
                         <td className="p-2 text-left border-r border-slate-300">๕. ร้อยละของผู้เรียนที่ผ่านเกณฑ์กิจกรรมพัฒนาผู้เรียนครบทุกกิจกรรม</td>
                         <td className="p-2 border-r border-slate-300">{totalStudents}</td>
-                        <td className="p-2 border-r border-slate-300">๑๐๐.๐%</td>
+                        <td className="p-2 border-r border-slate-300">{targets.activitiesTarget.toFixed(1)}%</td>
                         <td className="p-2 border-r border-slate-300 font-bold text-emerald-800">{overallActPct}%</td>
-                        <td className="p-2 font-bold text-emerald-700">บรรลุเป้าหมาย</td>
+                        <td className={`p-2 font-bold ${parseFloat(overallActPct) >= targets.activitiesTarget ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {parseFloat(overallActPct) >= targets.activitiesTarget ? 'บรรลุเป้าหมาย' : 'ต่ำกว่าเป้าหมาย'}
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -1402,6 +1531,238 @@ export const SarDashboardTab: React.FC<Props> = ({
                   </div>
                 </div>
 
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Target Settings Modal (กำหนดเกณฑ์เป้าหมาย สพฐ. และ ค่าเป้าหมายสถานศึกษา) */}
+      {isTargetModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-inner">
+                  <Target className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg leading-tight">
+                    กำหนดเกณฑ์เป้าหมาย สพฐ. & ค่าเป้าหมาย ร.ร.
+                  </h3>
+                  <p className="text-xs text-amber-100 mt-0.5">
+                    สำหรับรายงานการประเมินตนเอง (SAR) ชั้น{classLevel} ปีการศึกษา {academicYear}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsTargetModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto bg-slate-50/50">
+              {/* Notice Info Box */}
+              <div className="bg-blue-50 border border-blue-200/80 rounded-2xl p-4 flex items-start gap-3 text-xs text-blue-900 leading-relaxed">
+                <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">ข้อมูลสำคัญ:</span> ค่าเป้าหมายที่ท่านกำหนดในหน้านี้จะถูกนำไปใช้วาดเส้นเป้าหมายบน
+                  <strong> กราฟเปรียบเทียบ 9 วิชา (เส้นประสีส้ม)</strong>, 
+                  <strong> กราฟเรดาร์ 5 มิติ</strong>, 
+                  <strong> ตารางสรุปมาตรฐานที่ 1</strong> และสะท้อนในรายงาน SAR ทั้งไฟล์ Word และเอกสารสำหรับสั่งพิมพ์ทันที
+                </div>
+              </div>
+
+              {/* Section 1: สพฐ. Target */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                    <h4 className="font-bold text-xs sm:text-sm text-slate-800">
+                      ๑. เกณฑ์เป้าหมาย สพฐ. (ระดับชาติ)
+                    </h4>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                    ค่ามาตรฐาน สพฐ. = 70.0%
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pt-1">
+                  <label className="sm:col-span-8 text-xs font-medium text-slate-700 leading-snug">
+                    เกณฑ์ร้อยละของผู้เรียนที่มีผลสัมฤทธิ์ทางการเรียนระดับ 3 ขึ้นไป (สพฐ.):
+                    <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                      แสดงเป็นเส้นประสีส้มบนกราฟแท่ง 9 วิชา
+                    </span>
+                  </label>
+                  <div className="sm:col-span-4 flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      step="0.5"
+                      value={tempTargets.obecAcademicTarget}
+                      onChange={e => setTempTargets({ ...tempTargets, obecAcademicTarget: parseFloat(e.target.value) || 0 })}
+                      className="w-full text-center px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold font-mono focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    />
+                    <span className="font-bold text-xs text-slate-600 font-mono">%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: School Targets 5 Dimensions */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                    <h4 className="font-bold text-xs sm:text-sm text-slate-800">
+                      ๒. ค่าเป้าหมายของสถานศึกษา (มาตรฐานที่ ๑ คุณภาพผู้เรียน ๕ มิติ)
+                    </h4>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                    ประกาศค่าเป้าหมาย ร.ร.
+                  </span>
+                </div>
+
+                {/* Dimension 1: Attendance */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center py-1 border-b border-slate-100/80">
+                  <label className="sm:col-span-8 text-xs font-medium text-slate-700">
+                    ๑) ร้อยละผู้เรียนที่มีเวลาเรียนไม่น้อยกว่าร้อยละ ๘๐ (สิทธิ์สอบ ปพ.๕):
+                    <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                      เป้าหมายปกติของโรงเรียน = 100.0% หรือ 85.0%
+                    </span>
+                  </label>
+                  <div className="sm:col-span-4 flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      step="0.5"
+                      value={tempTargets.attendanceTarget}
+                      onChange={e => setTempTargets({ ...tempTargets, attendanceTarget: parseFloat(e.target.value) || 0 })}
+                      className="w-full text-center px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold font-mono focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <span className="font-bold text-xs text-slate-600 font-mono">%</span>
+                  </div>
+                </div>
+
+                {/* Dimension 2: Academic Grade 3+ */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center py-1 border-b border-slate-100/80">
+                  <label className="sm:col-span-8 text-xs font-medium text-slate-700">
+                    ๒) ร้อยละผลสัมฤทธิ์ทางการเรียนระดับ ๓ ขึ้นไป (๘ กลุ่มสาระ ๙ วิชา):
+                    <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                      เป้าหมายปกติของโรงเรียน = 70.0%
+                    </span>
+                  </label>
+                  <div className="sm:col-span-4 flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      step="0.5"
+                      value={tempTargets.academicTarget}
+                      onChange={e => setTempTargets({ ...tempTargets, academicTarget: parseFloat(e.target.value) || 0 })}
+                      className="w-full text-center px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold font-mono focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <span className="font-bold text-xs text-slate-600 font-mono">%</span>
+                  </div>
+                </div>
+
+                {/* Dimension 3: Reading */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center py-1 border-b border-slate-100/80">
+                  <label className="sm:col-span-8 text-xs font-medium text-slate-700">
+                    ๓) ร้อยละผลการประเมินการอ่าน คิดวิเคราะห์ และเขียน ระดับดีขึ้นไป:
+                    <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                      เป้าหมายปกติของโรงเรียน = 80.0%
+                    </span>
+                  </label>
+                  <div className="sm:col-span-4 flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      step="0.5"
+                      value={tempTargets.readingTarget}
+                      onChange={e => setTempTargets({ ...tempTargets, readingTarget: parseFloat(e.target.value) || 0 })}
+                      className="w-full text-center px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold font-mono focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <span className="font-bold text-xs text-slate-600 font-mono">%</span>
+                  </div>
+                </div>
+
+                {/* Dimension 4: Attributes */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center py-1 border-b border-slate-100/80">
+                  <label className="sm:col-span-8 text-xs font-medium text-slate-700">
+                    ๔) ร้อยละผลการประเมินคุณลักษณะอันพึงประสงค์ ระดับดีขึ้นไป:
+                    <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                      เป้าหมายปกติของโรงเรียน = 85.0%
+                    </span>
+                  </label>
+                  <div className="sm:col-span-4 flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      step="0.5"
+                      value={tempTargets.attributesTarget}
+                      onChange={e => setTempTargets({ ...tempTargets, attributesTarget: parseFloat(e.target.value) || 0 })}
+                      className="w-full text-center px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold font-mono focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <span className="font-bold text-xs text-slate-600 font-mono">%</span>
+                  </div>
+                </div>
+
+                {/* Dimension 5: Activities */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center py-1">
+                  <label className="sm:col-span-8 text-xs font-medium text-slate-700">
+                    ๕) ร้อยละผู้เรียนที่ผ่านกิจกรรมพัฒนาผู้เรียนครบทุกกิจกรรม:
+                    <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                      เป้าหมายปกติของโรงเรียน = 100.0%
+                    </span>
+                  </label>
+                  <div className="sm:col-span-4 flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="100" 
+                      step="0.5"
+                      value={tempTargets.activitiesTarget}
+                      onChange={e => setTempTargets({ ...tempTargets, activitiesTarget: parseFloat(e.target.value) || 0 })}
+                      className="w-full text-center px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold font-mono focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <span className="font-bold text-xs text-slate-600 font-mono">%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-100 p-4 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
+              <button 
+                onClick={handleResetTargets}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold border border-slate-300 transition cursor-pointer"
+                title="รีเซ็ตค่าเป้าหมายทั้งหมดกลับเป็นค่ามาตรฐาน สพฐ."
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>คืนค่าเริ่มต้น สพฐ.</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsTargetModalOpen(false)}
+                  className="px-4 py-2 bg-white hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold border border-slate-300 transition cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button 
+                  onClick={handleSaveTargets}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกค่าเป้าหมาย</span>
+                </button>
               </div>
             </div>
           </div>
