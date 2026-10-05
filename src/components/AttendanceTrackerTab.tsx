@@ -229,6 +229,17 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
     return !isHoliday;
   };
 
+  // ตรวจสอบจากสตริงวันที่ YYYY-MM-DD โดยตรง
+  const checkIsSchoolDateStr = (dateStr: string): boolean => {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return false;
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    if (isNaN(y) || isNaN(m) || isNaN(d)) return false;
+    return isSchoolDay(y, m, d);
+  };
+
   // ดึงรายการวันทั้งหมดในเดือนที่เลือก (1 ถึงสิ้นเดือน)
   const getDaysInSelectedMonth = () => {
     const [yStr, mStr] = selectedMonth.split('-');
@@ -310,32 +321,22 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
 
     currentDaily[dateStr] = nextStatus;
 
-    // คำนวณสรุปยอดสะสมของภาคเรียนที่กำลังเลือกอยู่แบบสัมพันธ์จริง
+    // คำนวณสรุปยอดสะสมของภาคเรียนที่กำลังเลือกอยู่แบบสัมพันธ์จริง (นับเฉพาะวันเปิดเรียน)
     const currentTermStart = semester === 1 ? scheduleConfig.term1StartDate : scheduleConfig.term2StartDate;
     const currentTermEnd = semester === 1 ? scheduleConfig.term1EndDate : scheduleConfig.term2EndDate;
 
     let presentCount = 0, leaveCount = 0, sickCount = 0, absentCount = 0, lateCount = 0;
-    let hasCount = false;
     Object.entries(currentDaily).forEach(([dStr, st]) => {
       if (dStr >= currentTermStart && dStr <= currentTermEnd) {
-        hasCount = true;
-        if (st === 'present') presentCount++;
-        else if (st === 'leave') leaveCount++;
-        else if (st === 'sick') sickCount++;
-        else if (st === 'absent') absentCount++;
-        else if (st === 'late') lateCount++;
+        if (checkIsSchoolDateStr(dStr)) {
+          if (st === 'present') presentCount++;
+          else if (st === 'leave') leaveCount++;
+          else if (st === 'sick') sickCount++;
+          else if (st === 'absent') absentCount++;
+          else if (st === 'late') lateCount++;
+        }
       }
     });
-
-    if (!hasCount) {
-      Object.values(currentDaily).forEach(st => {
-        if (st === 'present') presentCount++;
-        else if (st === 'leave') leaveCount++;
-        else if (st === 'sick') sickCount++;
-        else if (st === 'absent') absentCount++;
-        else if (st === 'late') lateCount++;
-      });
-    }
 
     const updated = {
       ...studentRecord,
@@ -355,43 +356,44 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
     }
   };
 
-  // มาเรียนทั้งหมดในเดือนนี้สำหรับทั้งห้อง
+  // มาเรียนทั้งหมดในเดือนนี้สำหรับทั้งห้อง (นับเฉพาะวันเปิดเรียนจริง)
   const handleMarkAllPresentInMonth = () => {
     const newRecords = { ...records };
     const currentTermStart = semester === 1 ? scheduleConfig.term1StartDate : scheduleConfig.term2StartDate;
     const currentTermEnd = semester === 1 ? scheduleConfig.term1EndDate : scheduleConfig.term2EndDate;
 
+    // กรองเฉพาะวันเปิดเรียนในเดือนนี้
+    const schoolDaysInThisMonth = monthDays.filter(d => d.isSchool);
+
     students.forEach(stu => {
       const studentRecord = newRecords[stu.studentId] || { present: 0, leave: 0, sick: 0, absent: 0, late: 0, dailyRecords: {} };
       const currentDaily = { ...(studentRecord.dailyRecords || {}) };
 
-      activeDays.forEach(d => {
-        const dateStr = `${selectedMonth}-${String(d).padStart(2, '0')}`;
+      // เซ็ตมาเรียนเฉพาะวันเปิดเรียนจริง
+      schoolDaysInThisMonth.forEach(d => {
+        const dateStr = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
         currentDaily[dateStr] = 'present';
       });
 
-      let presentCount = 0, leaveCount = 0, sickCount = 0, absentCount = 0, lateCount = 0;
-      let hasCount = false;
-      Object.entries(currentDaily).forEach(([dStr, st]) => {
-        if (dStr >= currentTermStart && dStr <= currentTermEnd) {
-          hasCount = true;
-          if (st === 'present') presentCount++;
-          else if (st === 'leave') leaveCount++;
-          else if (st === 'sick') sickCount++;
-          else if (st === 'absent') absentCount++;
-          else if (st === 'late') lateCount++;
-        }
+      // ลบวันที่ไม่ใช่วันเปิดเรียนในเดือนนี้ออกจาก dailyRecords หากเคยมีบันทึกตกค้าง
+      monthDays.filter(d => !d.isSchool).forEach(d => {
+        const dateStr = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
+        delete currentDaily[dateStr];
       });
 
-      if (!hasCount) {
-        Object.values(currentDaily).forEach(st => {
-          if (st === 'present') presentCount++;
-          else if (st === 'leave') leaveCount++;
-          else if (st === 'sick') sickCount++;
-          else if (st === 'absent') absentCount++;
-          else if (st === 'late') lateCount++;
-        });
-      }
+      // คำนวณสรุปยอดสะสมของภาคเรียนที่เลือก โดยนับเฉพาะวันที่เป็นวันเปิดเรียนจริง (isSchoolDay) เท่านั้น
+      let presentCount = 0, leaveCount = 0, sickCount = 0, absentCount = 0, lateCount = 0;
+      Object.entries(currentDaily).forEach(([dStr, st]) => {
+        if (dStr >= currentTermStart && dStr <= currentTermEnd) {
+          if (checkIsSchoolDateStr(dStr)) {
+            if (st === 'present') presentCount++;
+            else if (st === 'leave') leaveCount++;
+            else if (st === 'sick') sickCount++;
+            else if (st === 'absent') absentCount++;
+            else if (st === 'late') lateCount++;
+          }
+        }
+      });
 
       newRecords[stu.studentId] = {
         ...studentRecord,
@@ -505,7 +507,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                     (dStr >= scheduleConfig.term2StartDate && dStr <= scheduleConfig.term2EndDate);
         }
 
-        if (inScope) {
+        if (inScope && checkIsSchoolDateStr(dStr)) {
           hasScopeRecords = true;
           if (st === 'present') p++;
           else if (st === 'leave') l++;
@@ -732,10 +734,11 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={handleMarkAllPresentInMonth}
-                className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold border border-emerald-300 transition"
+                title={`บันทึกสถานะมาเรียนให้ทุกคนเฉพาะวันเปิดเรียนในเดือนนี้ (${activeDays.length} วันทำการ)`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs font-bold border border-emerald-300 transition shadow-2xs"
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>✓ ติ๊กมาทั้งเดือน</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>✓ ติ๊กมาทั้งเดือน (เฉพาะวันเปิดเรียน {activeDays.length} วัน)</span>
               </button>
               <button
                 type="button"
@@ -818,6 +821,22 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                     const studentRecord = records[s.studentId] || { present: 0, leave: 0, sick: 0, absent: 0, late: 0, dailyRecords: {} };
                     const daily = studentRecord.dailyRecords || {};
 
+                    // คำนวณสรุปเฉพาะของเดือนที่เลือก (selectedMonth) เฉพาะวันเปิดเรียนจริงเท่านั้น
+                    const schoolDaysInMonth = monthDays.filter(d => d.isSchool);
+                    let monthPresent = 0;
+                    let monthLeave = 0;
+                    let monthLate = 0;
+                    let monthAbsent = 0;
+
+                    schoolDaysInMonth.forEach(d => {
+                      const dateKey = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
+                      const curStatus = daily[dateKey] || 'present';
+                      if (curStatus === 'present') monthPresent++;
+                      else if (curStatus === 'leave' || curStatus === 'sick') monthLeave++;
+                      else if (curStatus === 'late') monthLate++;
+                      else if (curStatus === 'absent') monthAbsent++;
+                    });
+
                     return (
                       <tr key={s.id} className="hover:bg-slate-50/80 transition">
                         <td className="p-2 border-r border-slate-200 font-mono font-bold text-slate-500 sticky left-0 bg-white z-10 w-12 min-w-12 max-w-12 text-center">{s.seq}</td>
@@ -863,10 +882,10 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                             </td>
                           );
                         })}
-                        <td className="p-2 border-r border-slate-200 font-mono font-bold text-emerald-800 bg-emerald-50/40">{studentRecord.present}</td>
-                        <td className="p-2 border-r border-slate-200 font-mono text-blue-800">{studentRecord.leave + (studentRecord.sick || 0)}</td>
-                        <td className="p-2 border-r border-slate-200 font-mono text-amber-800">{studentRecord.late || 0}</td>
-                        <td className="p-2 border-r border-slate-200 font-mono font-bold text-rose-700 bg-rose-50/30">{studentRecord.absent}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono font-bold text-emerald-800 bg-emerald-50/40" title={`มาเรียน ${monthPresent} วัน (เฉพาะวันเปิดเรียน)`}>{monthPresent}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono text-blue-800">{monthLeave}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono text-amber-800">{monthLate}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono font-bold text-rose-700 bg-rose-50/30">{monthAbsent}</td>
                       </tr>
                     );
                   })}
@@ -893,9 +912,34 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                         </td>
                       );
                     })}
-                    <td colSpan={4} className="p-2 text-center text-slate-500 font-normal">
-                      ห้อง ป.1 ({students.length} คน)
-                    </td>
+                    {(() => {
+                      const schoolDaysInMonth = monthDays.filter(d => d.isSchool);
+                      let totalClassMonthPresent = 0;
+                      let totalClassMonthLeave = 0;
+                      let totalClassMonthLate = 0;
+                      let totalClassMonthAbsent = 0;
+
+                      students.forEach(s => {
+                        const daily = records[s.studentId]?.dailyRecords || {};
+                        schoolDaysInMonth.forEach(d => {
+                          const dateKey = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
+                          const curStatus = daily[dateKey] || 'present';
+                          if (curStatus === 'present') totalClassMonthPresent++;
+                          else if (curStatus === 'leave' || curStatus === 'sick') totalClassMonthLeave++;
+                          else if (curStatus === 'late') totalClassMonthLate++;
+                          else if (curStatus === 'absent') totalClassMonthAbsent++;
+                        });
+                      });
+
+                      return (
+                        <>
+                          <td className="p-2 border-r border-slate-200 font-mono font-bold text-emerald-800 bg-emerald-100/60 text-center" title="ยอดรวมมาเรียนทั้งห้องในเดือนนี้">{totalClassMonthPresent}</td>
+                          <td className="p-2 border-r border-slate-200 font-mono text-blue-800 bg-blue-100/60 text-center" title="ยอดรวมลาทั้งห้องในเดือนนี้">{totalClassMonthLeave}</td>
+                          <td className="p-2 border-r border-slate-200 font-mono text-amber-800 bg-amber-100/60 text-center" title="ยอดรวมสายทั้งห้องในเดือนนี้">{totalClassMonthLate}</td>
+                          <td className="p-2 border-r border-slate-200 font-mono font-bold text-rose-800 bg-rose-100/60 text-center" title="ยอดรวมขาดทั้งห้องในเดือนนี้">{totalClassMonthAbsent}</td>
+                        </>
+                      );
+                    })()}
                   </tr>
                 </tfoot>
               </table>
@@ -1498,6 +1542,23 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                   <tbody className="divide-y divide-slate-300">
                     {students.map((s) => {
                       const rec = records[s.studentId] || { present: 0, leave: 0, sick: 0, absent: 0, dailyRecords: {} };
+                      const daily = rec.dailyRecords || {};
+
+                      const schoolDaysInMonth = monthDays.filter(d => d.isSchool);
+                      let monthPresent = 0;
+                      let monthLeave = 0;
+                      let monthSick = 0;
+                      let monthAbsent = 0;
+
+                      schoolDaysInMonth.forEach(d => {
+                        const dateKey = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
+                        const st = daily[dateKey] || 'present';
+                        if (st === 'present') monthPresent++;
+                        else if (st === 'leave') monthLeave++;
+                        else if (st === 'sick') monthSick++;
+                        else if (st === 'absent') monthAbsent++;
+                      });
+
                       return (
                         <tr key={s.id}>
                           <td className="p-1 border-r border-slate-300 font-mono">{s.seq}</td>
@@ -1517,17 +1578,17 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                               );
                             }
                             const dateKey = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
-                            const st = (rec.dailyRecords || {})[dateKey] || 'present';
+                            const st = daily[dateKey] || 'present';
                             return (
                               <td key={d.day} className="p-0.5 border-r border-slate-300 font-mono">
                                 {st === 'present' ? '✓' : st === 'leave' ? 'ล' : st === 'sick' ? 'ป' : 'ข'}
                               </td>
                             );
                           })}
-                          <td className="p-1 border-r border-slate-300 font-mono font-bold text-emerald-800 bg-emerald-50/30">{rec.present}</td>
-                          <td className="p-1 border-r border-slate-300 font-mono">{rec.leave}</td>
-                          <td className="p-1 border-r border-slate-300 font-mono">{rec.sick}</td>
-                          <td className="p-1 font-mono font-bold text-rose-700">{rec.absent}</td>
+                          <td className="p-1 border-r border-slate-300 font-mono font-bold text-emerald-800 bg-emerald-50/30">{monthPresent}</td>
+                          <td className="p-1 border-r border-slate-300 font-mono">{monthLeave}</td>
+                          <td className="p-1 border-r border-slate-300 font-mono">{monthSick}</td>
+                          <td className="p-1 font-mono font-bold text-rose-700">{monthAbsent}</td>
                         </tr>
                       );
                     })}
