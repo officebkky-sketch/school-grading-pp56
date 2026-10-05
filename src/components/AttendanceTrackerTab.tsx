@@ -215,6 +215,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
   // Print Modals
   const [isGridPrintModalOpen, setIsGridPrintModalOpen] = useState(false);
   const [isCalendarPrintModalOpen, setIsCalendarPrintModalOpen] = useState(false);
+  const [isSummaryPrintModalOpen, setIsSummaryPrintModalOpen] = useState(false);
 
   // ตรวจสอบว่าเป็นวันทำการเรียนการสอนหรือไม่
   const isSchoolDay = (y: number, m: number, d: number): boolean => {
@@ -533,13 +534,13 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
 
     const totalRecordedDays = present + leave + sick + absent + late;
     // หากอยู่ในช่วงระหว่างภาคเรียน (ยังลงเวลาไม่ครบ targetDays) ให้คิดเปอร์เซ็นต์เทียบกับวันที่ลงบันทึกจริง
-    const effectiveDenominator = (hasScopeRecords && totalRecordedDays > 0 && totalRecordedDays < targetDays)
+    const effectiveDenominator = (totalRecordedDays > 0 && totalRecordedDays < targetDays)
       ? totalRecordedDays
       : (targetDays > 0 ? targetDays : 100);
 
-    const attendedWithExcused = present + leave + sick;
+    // ระเบียบ สพฐ.: คิดร้อยละจากวันมาเรียนจริง (present) เท่านั้น วันลา/ป่วย ไม่นับเป็นวันมาเรียน
     const percent = effectiveDenominator > 0
-      ? Math.min(100, Math.round(((attendedWithExcused / effectiveDenominator) * 100) * 10) / 10)
+      ? Math.min(100, Math.round(((present / effectiveDenominator) * 100) * 10) / 10)
       : 100.0;
     const isEligible = percent >= 80;
 
@@ -559,7 +560,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
 
   return (
     <>
-      <div className={`space-y-6 ${(isGridPrintModalOpen || isCalendarPrintModalOpen) ? 'print:hidden' : ''}`}>
+      <div className={`space-y-6 ${(isGridPrintModalOpen || isCalendarPrintModalOpen || isSummaryPrintModalOpen) ? 'print:hidden' : ''}`}>
         {/* Top Banner with Sub-Tab Navigation */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -1045,8 +1046,18 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
               </button>
             </div>
 
-            <div className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 shrink-0">
-              กำลังแสดง: {scopeLabel}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 shrink-0">
+                กำลังแสดง: {scopeLabel}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSummaryPrintModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>พิมพ์รายงานสรุปสิทธิ์สอบ (A4)</span>
+              </button>
             </div>
           </div>
 
@@ -1707,6 +1718,180 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                       </tr>
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: พิมพ์แบบรายงานสรุปสถิติเวลาเรียนและสิทธิ์เข้าสอบ (A4 ทางการ) */}
+      {/* ======================================================== */}
+      {isSummaryPrintModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:z-auto print:bg-transparent print:p-0 print:m-0 print:overflow-visible print:block">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full my-8 overflow-hidden flex flex-col max-h-[95vh] print:shadow-none print:border-none print:rounded-none print:max-h-none print:max-w-none print:w-full print:m-0 print:p-0 print:overflow-visible print:bg-transparent">
+            {/* Header Toolbar (hidden on print) */}
+            <div className="bg-slate-800 text-white px-6 py-3.5 flex items-center justify-between no-print border-b border-slate-700 shrink-0">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-bold text-sm sm:text-base">พิมพ์แบบรายงานสรุปสถิติเวลาเรียนและสิทธิ์เข้าสอบ (A4 แนวนอน)</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>สั่งพิมพ์เอกสารนี้</span>
+                </button>
+                <button 
+                  onClick={() => setIsSummaryPrintModalOpen(false)} 
+                  className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Document Body (Printable A4 Landscape) */}
+            <div className="p-6 overflow-y-auto bg-slate-200/60 flex justify-center print:p-0 print:bg-transparent print:overflow-visible print:block">
+              <div className="bg-white w-full max-w-[297mm] min-h-[210mm] p-8 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed print:shadow-none print:border-none print:p-6 print-page print-landscape flex flex-col justify-between">
+                <div>
+                  {/* Official Header */}
+                  <div className="text-center space-y-1 mb-4 border-b-2 border-slate-900 pb-2.5">
+                    <img 
+                      src="/garuda.png" 
+                      alt="ตราครุฑ" 
+                      className="w-14 h-14 mx-auto mb-1 object-contain"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                    <h1 className="text-base font-bold text-slate-900">
+                      แบบรายงานสรุปสถิติเวลาเรียนและผลการตัดสินสิทธิ์เข้าสอบปลายภาคเรียน
+                    </h1>
+                    <h2 className="text-xs font-bold text-slate-700">
+                      โรงเรียน{schoolName || 'บ้านควนโคกยา'} • ระดับชั้น{classLevel} • {scopeLabel} • ประจำปีการศึกษา ๒๕๖๙
+                    </h2>
+                    <p className="text-[11px] text-slate-600">
+                      สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต ๒ • วันเปิดทำการเรียนการสอนรวม {targetDays} วัน (เกณฑ์ขั้นต่ำ ๘๐% คือไม่น้อยกว่า {Math.ceil(targetDays * 0.8)} วันทำการ)
+                    </p>
+                  </div>
+
+                  {/* Summary Table */}
+                  <table className="w-full text-center border-collapse border border-slate-400 text-[10px]">
+                    <thead className="bg-slate-100 font-bold border-b border-slate-400">
+                      <tr>
+                        <th className="p-1.5 border-r border-slate-400 w-8">ที่</th>
+                        <th className="p-1.5 border-r border-slate-400 w-16 font-mono">รหัส</th>
+                        <th className="p-1.5 text-left px-2 border-r border-slate-400 min-w-[140px]">ชื่อ - สกุล</th>
+                        <th className="p-1.5 border-r border-slate-400 w-14 bg-emerald-50 text-emerald-900">มา (วัน)</th>
+                        <th className="p-1.5 border-r border-slate-400 w-12 bg-blue-50 text-blue-900">ลา (วัน)</th>
+                        <th className="p-1.5 border-r border-slate-400 w-12 bg-amber-50 text-amber-900">ป่วย (วัน)</th>
+                        <th className="p-1.5 border-r border-slate-400 w-12 bg-rose-50 text-rose-900">ขาด (วัน)</th>
+                        <th className="p-1.5 border-r border-slate-400 w-12 bg-purple-50 text-purple-900">สาย (ครั้ง)</th>
+                        <th className="p-1.5 border-r border-slate-400 w-14 bg-slate-200 text-slate-900">รวม (วัน)</th>
+                        <th className="p-1.5 border-r border-slate-400 w-16 bg-blue-100 text-blue-950 font-bold">ร้อยละ</th>
+                        <th className="p-1.5 w-28 font-bold">ผลสิทธิ์เข้าสอบ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-300">
+                      {evaluations.map((e) => {
+                        const totalDays = (e.record.present ?? 0) + (e.record.leave ?? 0) + (e.record.sick ?? 0) + (e.record.absent ?? 0);
+                        return (
+                          <tr key={e.student.id} className="hover:bg-slate-50">
+                            <td className="p-1 border-r border-slate-300 font-mono">{e.student.seq}</td>
+                            <td className="p-1 border-r border-slate-300 font-mono text-slate-500">{e.student.studentId}</td>
+                            <td className="p-1 text-left px-2 border-r border-slate-300 font-medium">
+                              {e.student.prefix}{e.student.firstName} {e.student.lastName}
+                            </td>
+                            <td className="p-1 border-r border-slate-300 font-mono font-bold text-emerald-800 bg-emerald-50/30">
+                              {e.record.present}
+                            </td>
+                            <td className="p-1 border-r border-slate-300 font-mono">{e.record.leave}</td>
+                            <td className="p-1 border-r border-slate-300 font-mono">{e.record.sick}</td>
+                            <td className="p-1 border-r border-slate-300 font-mono text-rose-700 font-bold">{e.record.absent}</td>
+                            <td className="p-1 border-r border-slate-300 font-mono text-purple-700">{e.record.late || 0}</td>
+                            <td className="p-1 border-r border-slate-300 font-mono font-bold bg-slate-100">{totalDays}</td>
+                            <td className={`p-1 border-r border-slate-300 font-mono font-bold ${e.isEligible ? 'text-blue-900' : 'text-rose-700'}`}>
+                              {e.percent}%
+                            </td>
+                            <td className={`p-1 font-bold ${e.isEligible ? 'text-emerald-700' : 'text-rose-700'}`}>
+                              {e.isEligible ? 'มีสิทธิ์สอบ (ปพ.5)' : 'หมดสิทธิ์สอบ (มส.)'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                      <tr>
+                        <td colSpan={3} className="p-1.5 text-center border-r border-slate-300">
+                          รวม / เฉลี่ยทั้งห้อง ({evaluations.length} คน)
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 font-mono text-emerald-900">
+                          {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + e.record.present, 0) / evaluations.length).toFixed(1) : 0}
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 font-mono text-blue-900">
+                          {evaluations.reduce((sum, e) => sum + e.record.leave, 0)}
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 font-mono text-amber-900">
+                          {evaluations.reduce((sum, e) => sum + e.record.sick, 0)}
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 font-mono text-rose-900">
+                          {evaluations.reduce((sum, e) => sum + e.record.absent, 0)}
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 font-mono text-purple-900">
+                          {evaluations.reduce((sum, e) => sum + (e.record.late || 0), 0)}
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 font-mono font-bold">
+                          {targetDays}
+                        </td>
+                        <td className="p-1.5 border-r border-slate-300 font-mono text-slate-900">
+                          เฉลี่ย {avgPercent}%
+                        </td>
+                        <td className="p-1.5 font-bold">
+                          <span className="text-emerald-700">มีสิทธิ์ {eligibleCount}</span>
+                          {inEligibleCount > 0 && <span className="text-rose-700 ml-1">| มส. {inEligibleCount}</span>}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+
+                  {/* Summary Notes */}
+                  <div className="mt-3 p-3 bg-slate-50 border border-slate-300 rounded text-[11px] text-slate-700">
+                    <div className="font-bold text-slate-900 mb-1">สรุปผลการพิจารณาสิทธิ์เข้าสอบ:</div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p>• นักเรียนทั้งหมดจำนวน <strong>{evaluations.length} คน</strong></p>
+                        <p>• มีเวลาเรียนครบตามเกณฑ์ร้อยละ ๘๐ (มีสิทธิ์สอบ) จำนวน <strong>{eligibleCount} คน</strong> (คิดเป็นร้อยละ {((eligibleCount / (evaluations.length || 1)) * 100).toFixed(1)}%)</p>
+                      </div>
+                      <div>
+                        <p>• มีเวลาเรียนไม่ครบตามเกณฑ์ (หมดสิทธิ์สอบ) จำนวน <strong>{inEligibleCount} คน</strong> (คิดเป็นร้อยละ {((inEligibleCount / (evaluations.length || 1)) * 100).toFixed(1)}%)</p>
+                        <p>• ร้อยละการมาเรียนเฉลี่ยทั้งชั้นเรียน: <strong>{avgPercent}%</strong></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Signatures 3 Blocks */}
+                <div className="mt-6 pt-4 border-t border-slate-400 grid grid-cols-3 text-center text-xs">
+                  <div>
+                    <div className="h-8"></div>
+                    <div>ลงชื่อ......................................................</div>
+                    <div className="font-semibold mt-1">({homeroomTeacher || 'ครูประจำชั้น'})</div>
+                    <div className="text-slate-600 text-[10px]">ครูประจำชั้นประถมศึกษาปีที่ {classLevel.replace('ป.', '')}</div>
+                  </div>
+                  <div>
+                    <div className="h-8"></div>
+                    <div>ลงชื่อ......................................................</div>
+                    <div className="font-semibold mt-1">({academicHeadName || 'นางสาววัชรี พรหมช่วย'})</div>
+                    <div className="text-slate-600 text-[10px]">หัวหน้าฝ่ายวิชาการ / นายทะเบียน</div>
+                  </div>
+                  <div>
+                    <div className="h-8"></div>
+                    <div>ลงชื่อ......................................................</div>
+                    <div className="font-semibold mt-1">({directorName || 'นายเอกคณิต สิทธิศักดิ์'})</div>
+                    <div className="text-slate-600 text-[10px]">ผู้อำนวยการโรงเรียน{schoolName || 'บ้านควนโคกยา'}</div>
+                  </div>
                 </div>
               </div>
             </div>

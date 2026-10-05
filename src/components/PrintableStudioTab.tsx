@@ -59,6 +59,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
   const [selectedStudentId, setSelectedStudentId] = useState<string>('ALL'); // Default 'ALL' เพื่อความสะดวกในการพิมพ์ทั้งห้อง
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [coverType, setCoverType] = useState<'class' | 'subject'>('class');
+  const [attendanceTermMode, setAttendanceTermMode] = useState<'year' | 'term1' | 'term2'>('year');
 
   const singleStudent = students.find(s => s.studentId === selectedStudentId) || students[0];
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId) || subjects[0];
@@ -156,94 +157,121 @@ export const PrintableStudioTab: React.FC<Props> = ({
     return 'ดีเยี่ยม (3)';
   };
 
-  // Helper คำนวณสรุปเวลาเรียนและแจกแจงรายเดือน 11 เดือน สำหรับ ปพ.5 (ป้องกันวันติดลบ 100%)
+  // Helper คำนวณสรุปเวลาเรียนและแจกแจงรายเดือน สำหรับ ปพ.5 (รองรับแยกภาคเรียน 1, 2 และตลอดปีการศึกษา)
   const computeAttendanceBreakdown = (
     att: AttendanceDetail | undefined,
-    configTotalDays: number = 208
+    configTotalDays: number = 208,
+    termMode: 'year' | 'term1' | 'term2' = 'year'
   ) => {
     const safeAtt = att || { present: 208, leave: 0, sick: 0, absent: 0 };
-    const totalAttended = Number(safeAtt.present ?? 208);
-    const leaveCount = Number(safeAtt.leave ?? 0);
-    const sickCount = Number(safeAtt.sick ?? 0);
-    const absentCount = Number(safeAtt.absent ?? 0);
-    const totalRecorded = totalAttended + leaveCount + sickCount + absentCount;
+    const allMDays = [11, 21, 21, 21, 22, 8, 21, 21, 20, 20, 22];
+    const allMKeys = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
+    const allMLabels = ['พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.', 'ม.ค.', 'ก.พ.', 'มี.ค.'];
 
-    const mDays = [11, 21, 21, 21, 22, 8, 21, 21, 20, 20, 22];
-    const mKeys = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
-    const studentMDays: number[] = new Array(11).fill(0);
+    let startIndex = 0;
+    let endIndex = 11;
+    let termDaysCap = configTotalDays || 208;
+
+    if (termMode === 'term1') {
+      startIndex = 0;
+      endIndex = 6;
+      termDaysCap = 104;
+    } else if (termMode === 'term2') {
+      startIndex = 6;
+      endIndex = 11;
+      termDaysCap = 104;
+    }
+
+    const mDays = allMDays.slice(startIndex, endIndex);
+    const mKeys = allMKeys.slice(startIndex, endIndex);
+    const mLabels = allMLabels.slice(startIndex, endIndex);
 
     const daily = safeAtt.dailyRecords || {};
     const hasDaily = Object.keys(daily).length > 0;
 
+    let totalAttended = Number(safeAtt.present ?? termDaysCap);
+    let leaveCount = Number(safeAtt.leave ?? 0);
+    let sickCount = Number(safeAtt.sick ?? 0);
+    let absentCount = Number(safeAtt.absent ?? 0);
+
+    const studentMDays: number[] = new Array(mDays.length).fill(0);
+
     if (hasDaily) {
-      let matchedPresent = 0;
+      let pTerm = 0, lTerm = 0, sTerm = 0, aTerm = 0;
+      let hasTermSpecificRecords = false;
+
       mKeys.forEach((mKey, idx) => {
         let pCount = 0;
         Object.entries(daily).forEach(([dateStr, st]) => {
           if (dateStr.startsWith(mKey)) {
-            if (st === 'present' || st === 'late') {
-              pCount++;
-            }
+            hasTermSpecificRecords = true;
+            if (st === 'present' || st === 'late') pCount++;
+            else if (st === 'leave') lTerm++;
+            else if (st === 'sick') sTerm++;
+            else if (st === 'absent') aTerm++;
           }
         });
         studentMDays[idx] = Math.min(mDays[idx], pCount);
-        matchedPresent += studentMDays[idx];
+        pTerm += studentMDays[idx];
       });
 
-      if (totalAttended > matchedPresent) {
-        let rem = totalAttended - matchedPresent;
-        for (let i = 0; i < 11 && rem > 0; i++) {
-          const cap = mDays[i];
-          const canAdd = Math.max(0, cap - studentMDays[i]);
-          const add = Math.min(rem, canAdd);
-          studentMDays[i] += add;
-          rem -= add;
+      if (termMode !== 'year' && hasTermSpecificRecords) {
+        totalAttended = pTerm;
+        leaveCount = lTerm;
+        sickCount = sTerm;
+        absentCount = aTerm;
+      } else {
+        if (totalAttended > pTerm) {
+          let rem = totalAttended - pTerm;
+          for (let i = 0; i < studentMDays.length && rem > 0; i++) {
+            const cap = mDays[i];
+            const canAdd = Math.max(0, cap - studentMDays[i]);
+            const add = Math.min(rem, canAdd);
+            studentMDays[i] += add;
+            rem -= add;
+          }
+        } else if (totalAttended < pTerm) {
+          // หากข้อมูลรายวันมีมากกว่ายอดสรุป (เช่น บันทึก template มาทุกคนไว้) ให้ตัดทอนจากเดือนหลังสุดย้อนมาให้เท่ากับวันมาจริง
+          let excess = pTerm - totalAttended;
+          for (let i = studentMDays.length - 1; i >= 0 && excess > 0; i--) {
+            const deduct = Math.min(excess, studentMDays[i]);
+            studentMDays[i] -= deduct;
+            excess -= deduct;
+          }
         }
       }
     } else {
-      if (totalAttended >= 190) {
-        const diff = Math.max(0, 208 - totalAttended);
-        for (let i = 0; i < 11; i++) {
-          studentMDays[i] = mDays[i];
-        }
-        let remDiff = diff;
-        for (let i = 1; i < 11 && remDiff > 0; i++) {
-          const deduct = Math.min(remDiff, Math.min(2, studentMDays[i]));
-          studentMDays[i] -= deduct;
-          remDiff -= deduct;
-        }
-        if (remDiff > 0) {
-          studentMDays[0] = Math.max(0, studentMDays[0] - remDiff);
-        }
-      } else {
-        let rem = totalAttended;
-        for (let i = 0; i < 11; i++) {
-          const cap = mDays[i];
-          const days = Math.min(cap, Math.max(0, rem));
-          studentMDays[i] = days;
-          rem -= days;
-        }
+      let rem = termMode === 'term2' ? Math.max(0, totalAttended - 104) : Math.min(termDaysCap, totalAttended);
+      for (let i = 0; i < studentMDays.length; i++) {
+        const cap = mDays[i];
+        const days = Math.min(cap, Math.max(0, rem));
+        studentMDays[i] = days;
+        rem -= days;
       }
     }
 
-    const effectiveTotalDays = (totalRecorded > 0 && totalRecorded < 180)
+    const totalRecorded = totalAttended + leaveCount + sickCount + absentCount;
+    const effectiveTotalDays = (totalRecorded > 0 && totalRecorded < (termDaysCap * 0.9))
       ? totalRecorded
-      : (configTotalDays || 208);
+      : termDaysCap;
 
-    const attendedWithExcused = totalAttended + leaveCount + sickCount;
+    // ระเบียบกระทรวงศึกษาธิการ: คิดร้อยละเวลาเรียนจาก "วันมาเรียนจริง (totalAttended)" เทียบกับเวลาเปิดเรียนทั้งหมด
+    // วันลา และวันขาดเรียน ไม่สามารถนับรวมเป็นวันมาเรียนได้
     const rawPct = effectiveTotalDays > 0
-      ? Math.min(100, Math.round(((attendedWithExcused / effectiveTotalDays) * 100) * 10) / 10)
+      ? Math.min(100, Math.round(((totalAttended / effectiveTotalDays) * 100) * 10) / 10)
       : 100.0;
     const attPercent = rawPct.toFixed(1);
     const isEligible = Number(attPercent) >= 80;
 
     return {
+      mLabels,
+      mDays,
       studentMDays,
       totalAttended,
       leaveCount,
       sickCount,
       absentCount,
-      totalComputed: attendedWithExcused,
+      totalComputed: effectiveTotalDays,
       attPercent,
       isEligible
     };
@@ -253,7 +281,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
   const renderPP6Card = (std: StudentProfile, isBatch = false) => {
     const att = attendanceData[std.studentId] || { present: 198, leave: 1, sick: 1, absent: 0 };
     const totalDays = att.present + att.leave + att.sick + att.absent || 200;
-    const attPercent = totalDays > 0 ? (((att.present + att.leave + att.sick) / totalDays) * 100).toFixed(1) : '99.0';
+    const attPercent = totalDays > 0 ? ((att.present / totalDays) * 100).toFixed(1) : '100.0';
     const isEligible = Number(attPercent) >= 80;
 
     const hol = holisticData[std.studentId] || {
@@ -744,6 +772,19 @@ export const PrintableStudioTab: React.FC<Props> = ({
               </select>
             )}
 
+            {/* Term Selector (for PP5 Attendance) */}
+            {printMode === 'pp5_attendance' && (
+              <select
+                value={attendanceTermMode}
+                onChange={(e) => setAttendanceTermMode(e.target.value as any)}
+                className="text-xs font-bold bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer text-slate-800"
+              >
+                <option value="year">📅 ตลอดทั้งปีการศึกษา (๑๑ เดือน • ๒๐๘ วัน)</option>
+                <option value="term1">🍂 เฉพาะภาคเรียนที่ ๑ (พ.ค. - ต.ค. • ๑๐๔ วัน)</option>
+                <option value="term2">🌸 เฉพาะภาคเรียนที่ ๒ (พ.ย. - มี.ค. • ๑๐๔ วัน)</option>
+              </select>
+            )}
+
             {/* Print Action Button */}
             <button
               onClick={handlePrint}
@@ -1156,44 +1197,70 @@ export const PrintableStudioTab: React.FC<Props> = ({
                   />
                   <div>
                     <h1 className="text-base font-bold text-slate-900">
-                      แบบบันทึกผลการพัฒนาคุณภาพผู้เรียน (ปพ.5) - บัญชีสรุปเวลาเรียนและส่วนบันทึกการมาเรียน
+                      แบบบันทึกผลการพัฒนาคุณภาพผู้เรียน (ปพ.5) - {attendanceTermMode === 'term1' ? 'บัญชีสรุปเวลาเรียน ภาคเรียนที่ ๑' : attendanceTermMode === 'term2' ? 'บัญชีสรุปเวลาเรียน ภาคเรียนที่ ๒' : 'บัญชีสรุปเวลาเรียนและส่วนบันทึกการมาเรียน'}
                     </h1>
                     <div className="text-xs font-semibold text-slate-700">
-                      โรงเรียน{config.schoolName} • ชั้น {config.classLevel} • ปีการศึกษา {config.academicYear} • สพป.พัทลุง เขต 2 • เวลาเรียนรวมทั้งสิ้น ๒๐๘ วันทำการ
+                      โรงเรียน{config.schoolName} • ชั้น {config.classLevel} • {attendanceTermMode === 'term1' ? 'ภาคเรียนที่ ๑' : attendanceTermMode === 'term2' ? 'ภาคเรียนที่ ๒' : 'ตลอดปีการศึกษา'} {config.academicYear} • สพป.พัทลุง เขต 2 • เวลาเรียนรวมทั้งสิ้น {attendanceTermMode === 'year' ? '๒๐๘' : '๑๐๔'} วันทำการ
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* 11-Month Matrix + Summary Table */}
+              {/* Attendance Matrix + Summary Table */}
               <table className="w-full text-center border-collapse border border-slate-300 text-[10px]">
                 <thead className="bg-slate-100 font-bold border-b border-slate-300">
                   <tr>
                     <th rowSpan={2} className="p-1 border-r border-slate-300 w-7">ที่</th>
                     <th rowSpan={2} className="p-1 border-r border-slate-300 w-14 font-mono">รหัส</th>
                     <th rowSpan={2} className="p-1 text-left px-2 border-r border-slate-300 min-w-[120px]">ชื่อ - สกุล</th>
-                    <th colSpan={6} className="p-1 border-r border-slate-300 bg-sky-50 text-sky-900">ภาคเรียนที่ ๑ (๑๐๔ วัน)</th>
-                    <th colSpan={5} className="p-1 border-r border-slate-300 bg-indigo-50 text-indigo-900">ภาคเรียนที่ ๒ (๑๐๔ วัน)</th>
-                    <th colSpan={4} className="p-1 border-r border-slate-300 bg-emerald-50 text-emerald-900">สรุปสถิติตลอดปี</th>
-                    <th rowSpan={2} className="p-1 border-r border-slate-300 w-10 bg-emerald-100 text-emerald-950">รวม (๒๐๘)</th>
+                    {/* Columns by Term Mode */}
+                    {attendanceTermMode === 'year' && (
+                      <>
+                        <th colSpan={6} className="p-1 border-r border-slate-300 bg-sky-50 text-sky-900">ภาคเรียนที่ ๑ (๑๐๔ วัน)</th>
+                        <th colSpan={5} className="p-1 border-r border-slate-300 bg-indigo-50 text-indigo-900">ภาคเรียนที่ ๒ (๑๐๔ วัน)</th>
+                        <th colSpan={4} className="p-1 border-r border-slate-300 bg-emerald-50 text-emerald-900">สรุปสถิติตลอดปี</th>
+                        <th rowSpan={2} className="p-1 border-r border-slate-300 w-10 bg-emerald-100 text-emerald-950">รวม (๒๐๘)</th>
+                      </>
+                    )}
+                    {attendanceTermMode === 'term1' && (
+                      <>
+                        <th colSpan={6} className="p-1 border-r border-slate-300 bg-sky-50 text-sky-900">แจกแจงรายเดือน ภาคเรียนที่ ๑ (๑๐๔ วันทำการ)</th>
+                        <th colSpan={4} className="p-1 border-r border-slate-300 bg-emerald-50 text-emerald-900">สรุปสถิติภาค ๑</th>
+                        <th rowSpan={2} className="p-1 border-r border-slate-300 w-10 bg-emerald-100 text-emerald-950">รวม (๑๐๔)</th>
+                      </>
+                    )}
+                    {attendanceTermMode === 'term2' && (
+                      <>
+                        <th colSpan={5} className="p-1 border-r border-slate-300 bg-indigo-50 text-indigo-900">แจกแจงรายเดือน ภาคเรียนที่ ๒ (๑๐๔ วันทำการ)</th>
+                        <th colSpan={4} className="p-1 border-r border-slate-300 bg-emerald-50 text-emerald-900">สรุปสถิติภาค ๒</th>
+                        <th rowSpan={2} className="p-1 border-r border-slate-300 w-10 bg-emerald-100 text-emerald-950">รวม (๑๐๔)</th>
+                      </>
+                    )}
                     <th rowSpan={2} className="p-1 border-r border-slate-300 w-10 bg-blue-50 text-blue-900">ร้อยละ</th>
                     <th rowSpan={2} className="p-1 w-20">สิทธิ์เข้าสอบ</th>
                   </tr>
                   <tr className="bg-slate-50 text-[9px]">
-                    {/* ภาค 1 */}
-                    <th className="p-0.5 border-r border-slate-300 w-6">พ.ค.<br/><span className="text-slate-500 font-normal">11</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">มิ.ย.<br/><span className="text-slate-500 font-normal">21</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">ก.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">ส.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">ก.ย.<br/><span className="text-slate-500 font-normal">22</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">ต.ค.<br/><span className="text-slate-500 font-normal">8</span></th>
-                    {/* ภาค 2 */}
-                    <th className="p-0.5 border-r border-slate-300 w-6">พ.ย.<br/><span className="text-slate-500 font-normal">21</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">ธ.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">ม.ค.<br/><span className="text-slate-500 font-normal">20</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">ก.พ.<br/><span className="text-slate-500 font-normal">20</span></th>
-                    <th className="p-0.5 border-r border-slate-300 w-6">มี.ค.<br/><span className="text-slate-500 font-normal">22</span></th>
-                    {/* รวมสถิติ */}
+                    {/* Months based on termMode */}
+                    {(attendanceTermMode === 'year' || attendanceTermMode === 'term1') && (
+                      <>
+                        <th className="p-0.5 border-r border-slate-300 w-6">พ.ค.<br/><span className="text-slate-500 font-normal">11</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">มิ.ย.<br/><span className="text-slate-500 font-normal">21</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ก.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ส.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ก.ย.<br/><span className="text-slate-500 font-normal">22</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ต.ค.<br/><span className="text-slate-500 font-normal">8</span></th>
+                      </>
+                    )}
+                    {(attendanceTermMode === 'year' || attendanceTermMode === 'term2') && (
+                      <>
+                        <th className="p-0.5 border-r border-slate-300 w-6">พ.ย.<br/><span className="text-slate-500 font-normal">21</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ธ.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ม.ค.<br/><span className="text-slate-500 font-normal">20</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ก.พ.<br/><span className="text-slate-500 font-normal">20</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">มี.ค.<br/><span className="text-slate-500 font-normal">22</span></th>
+                      </>
+                    )}
+                    {/* สถิติ มา ลา ป่วย ขาด */}
                     <th className="p-0.5 border-r border-slate-300 w-7 bg-emerald-50 text-emerald-800">มา</th>
                     <th className="p-0.5 border-r border-slate-300 w-6">ลา</th>
                     <th className="p-0.5 border-r border-slate-300 w-6">ป่วย</th>
@@ -1202,7 +1269,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-mono text-[10px]">
                   {students.map((s) => {
-                    const breakdown = computeAttendanceBreakdown(attendanceData[s.studentId], 208);
+                    const breakdown = computeAttendanceBreakdown(attendanceData[s.studentId], 208, attendanceTermMode);
 
                     return (
                       <tr key={s.id} className="hover:bg-slate-50">
@@ -1211,20 +1278,20 @@ export const PrintableStudioTab: React.FC<Props> = ({
                         <td className="p-1 text-left px-2 border-r border-slate-300 font-sans font-medium truncate">
                           {s.prefix}{s.firstName} {s.lastName}
                         </td>
-                        {/* 11 เดือน */}
+                        {/* Month columns */}
                         {breakdown.studentMDays.map((d, dIdx) => (
                           <td key={dIdx} className="p-0.5 border-r border-slate-300 font-mono">
                             {d}
                           </td>
                         ))}
-                        {/* สรุปสถิติ */}
+                        {/* Summary stats */}
                         <td className="p-1 border-r border-slate-300 font-bold text-emerald-800 bg-emerald-50">{breakdown.totalAttended}</td>
                         <td className="p-1 border-r border-slate-300">{breakdown.leaveCount}</td>
                         <td className="p-1 border-r border-slate-300">{breakdown.sickCount}</td>
                         <td className="p-1 border-r border-slate-300 text-slate-400">{breakdown.absentCount}</td>
                         <td className="p-1 border-r border-slate-300 font-bold bg-emerald-100 text-emerald-950">{breakdown.totalComputed}</td>
-                        <td className="p-1 border-r border-slate-300 font-bold text-blue-900 bg-blue-50">{breakdown.attPercent}%</td>
-                        <td className="p-1 font-sans font-bold text-emerald-700 bg-emerald-50/50">
+                        <td className={`p-1 border-r border-slate-300 font-bold ${breakdown.isEligible ? 'text-blue-900 bg-blue-50' : 'text-rose-700 bg-rose-50'}`}>{breakdown.attPercent}%</td>
+                        <td className={`p-1 font-sans font-bold ${breakdown.isEligible ? 'text-emerald-700 bg-emerald-50/50' : 'text-rose-700 bg-rose-50'}`}>
                           {breakdown.isEligible ? 'มีสิทธิ์สอบ (ปพ.5)' : 'หมดสิทธิ์สอบ'}
                         </td>
                       </tr>
@@ -1237,18 +1304,27 @@ export const PrintableStudioTab: React.FC<Props> = ({
               <div className="mt-3 p-3 bg-slate-50 border border-slate-300 rounded-lg space-y-1.5 text-[11px] text-slate-700">
                 <div className="flex items-center justify-between border-b border-slate-200 pb-1">
                   <span className="font-bold text-slate-900">📝 ส่วนบันทึกการมาเรียนและข้อสังเกตของครูประจำชั้น (ปพ.๕)</span>
-                  <span className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">สรุปเวลาเรียนครบถ้วนสมบูรณ์</span>
+                  <span className="text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                    {attendanceTermMode === 'term1' ? 'สรุปเวลาเรียนภาคเรียนที่ ๑' : attendanceTermMode === 'term2' ? 'สรุปเวลาเรียนภาคเรียนที่ ๒' : 'สรุปเวลาเรียนครบถ้วนสมบูรณ์'}
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div className="bg-white p-2 rounded border border-slate-200 space-y-0.5">
                     <span className="font-bold text-slate-800 block">๑. สรุปสถิติเวลาเรียนและการตัดสินสิทธิ์เข้าสอบ:</span>
-                    <p>• วันเปิดทำการตลอดปีการศึกษา รวมทั้งสิ้น <strong>๒๐๘ วันทำการ</strong> (เกณฑ์ ๘๐% คือไม่น้อยกว่า ๑๖๗ วัน)</p>
-                    <p>• นักเรียนมีเวลาเรียนครบตามเกณฑ์ร้อยละ ๘๐ จำนวน <strong>{students.length} คน คิดเป็นร้อยละ ๑๐๐</strong></p>
+                    <p>• วันเปิดทำการ{attendanceTermMode === 'year' ? 'ตลอดปีการศึกษา' : 'ประจำภาคเรียน'} รวมทั้งสิ้น <strong>{attendanceTermMode === 'year' ? '๒๐๘' : '๑๐๔'} วันทำการ</strong> (เกณฑ์ ๘๐% คือไม่น้อยกว่า {attendanceTermMode === 'year' ? '๑๖๗' : '๘๔'} วัน)</p>
+                    {(() => {
+                      const eligibleList = students.filter(s => computeAttendanceBreakdown(attendanceData[s.studentId], 208, attendanceTermMode).isEligible);
+                      const eligCount = eligibleList.length;
+                      const eligPct = students.length > 0 ? ((eligCount / students.length) * 100).toFixed(1) : '100.0';
+                      return (
+                        <p>• นักเรียนมีเวลาเรียนครบตามเกณฑ์ร้อยละ ๘๐ จำนวน <strong>{eligCount} คน จากทั้งหมด {students.length} คน (คิดเป็นร้อยละ {eligPct})</strong></p>
+                      );
+                    })()}
                   </div>
                   <div className="bg-white p-2 rounded border border-slate-200 space-y-0.5">
                     <span className="font-bold text-slate-800 block">๒. บันทึกพฤติกรรมการมาเรียนและการติดตามช่วยเหลือนักเรียน:</span>
                     <p className="italic text-slate-600">
-                      นักเรียนทุกคนมีความตั้งใจในการมาเรียนสม่ำเสมอและตรงต่อเวลา มีการลาตามระเบียบถูกต้อง ไม่พบพฤติกรรมการขาดเรียนโดยไม่ได้รับอนุญาต ได้รายงานสถิติเวลาเรียนแก่ผู้ปกครองผ่าน ปพ.๖ ครบถ้วน
+                      นักเรียนส่วนใหญ่มีความตั้งใจในการมาเรียนสม่ำเสมอ สำหรับนักเรียนที่มีเวลาเรียนไม่ถึงเกณฑ์ร้อยละ ๘๐ ครูประจำชั้นได้ติดตามและแจ้งผู้ปกครองทราบเพื่อดำเนินการส่งเสริมและแก้ไขปัญหาการมาเรียนตามระเบียบ
                     </p>
                   </div>
                 </div>
