@@ -28,6 +28,7 @@ export const TeacherLoginModal: React.FC<Props> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [rememberLogin, setRememberLogin] = useState<boolean>(() => localStorage.getItem('pp5_remember_login') === 'true');
 
   if (!isOpen) return null;
 
@@ -45,6 +46,11 @@ export const TeacherLoginModal: React.FC<Props> = ({
     setLoading(false);
 
     if (res.success && res.user) {
+      if (rememberLogin) {
+        localStorage.setItem('pp5_remember_login', 'true');
+      } else {
+        localStorage.removeItem('pp5_remember_login');
+      }
       onLoginSuccess(res.user);
       onClose();
     } else {
@@ -68,6 +74,11 @@ export const TeacherLoginModal: React.FC<Props> = ({
   };
 
   const handleSelectTeacherQuick = (t: TeacherProfile) => {
+    if (rememberLogin) {
+      localStorage.setItem('pp5_remember_login', 'true');
+    } else {
+      localStorage.removeItem('pp5_remember_login');
+    }
     const user = AuthService.loginAsTeacher(t);
     onLoginSuccess(user);
     onClose();
@@ -188,6 +199,18 @@ export const TeacherLoginModal: React.FC<Props> = ({
                 </ul>
               </div>
 
+              <div className="py-1">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberLogin}
+                    onChange={(e) => setRememberLogin(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <span className="font-semibold text-slate-800">จดจำการเข้าสู่ระบบบนเครื่องนี้ (Desktop Auto-Login)</span>
+                </label>
+              </div>
+
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
@@ -208,7 +231,7 @@ export const TeacherLoginModal: React.FC<Props> = ({
             </form>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center justify-between gap-2 mb-1">
                 <p className="text-xs text-slate-500">
                   เลือกโปรไฟล์ของคุณเพื่อเข้าสู่ห้องเรียนที่รับผิดชอบ:
                 </p>
@@ -224,6 +247,18 @@ export const TeacherLoginModal: React.FC<Props> = ({
                     <span>{isRefreshing ? 'กำลังซิงค์...' : refreshSuccess ? 'อัปเดตแล้ว ✓' : 'ซิงค์ครูใหม่'}</span>
                   </button>
                 )}
+              </div>
+
+              <div className="bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-200/80 mb-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberLogin}
+                    onChange={(e) => setRememberLogin(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <span className="font-semibold text-emerald-950">จดจำโปรไฟล์ครูนี้บนเครื่องนี้ (Desktop Auto-Login)</span>
+                </label>
               </div>
               <div className="grid grid-cols-1 gap-2 max-h-72 overflow-y-auto pr-1">
                 {(teachers && teachers.length > 0 ? teachers : DEFAULT_TEACHERS).map((t) => {

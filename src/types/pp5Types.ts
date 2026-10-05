@@ -50,6 +50,7 @@ export interface SubjectConfig {
   id: string;
   code: string;         // เช่น "ท 11101"
   name: string;         // เช่น "ภาษาไทย 1"
+  shortName?: string;   // เช่น "ไทย", "คณิต"
   type: 'พื้นฐาน' | 'เพิ่มเติม' | 'กิจกรรม';
   credits: number;      // หน่วยกิต/น้ำหนัก เช่น 1.0, 0.5
   hoursPerYear: number; // ชม./ปี เช่น 160, 80
@@ -155,5 +156,6 @@ export type PrintDocumentMode =
   | 'pp5_attendance'  // ปพ.5 บัญชีเวลาเรียน
   | 'pp5_holistic'    // ปพ.5 คุณลักษณะ & สมรรถนะ & กิจกรรม
   | 'pp5_health'      // ปพ.5 บันทึกสุขภาพและการเจริญเติบโต (ht/age)
+  | 'pp5_bundle'      // พิมพ์ทั้งเล่ม ปพ.5 (All-in-One เสนอ ผอ.)
   | 'certificate';    // เกียรติบัตรนักเรียนคะแนนสูงสุดรายวิชา & เรียนดีเด่น
 

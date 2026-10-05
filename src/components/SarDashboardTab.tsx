@@ -583,7 +583,7 @@ export const SarDashboardTab: React.FC<Props> = ({
     const header = `
       <div class="header-box">
         <h1>รายงานผลการประเมินตนเองของสถานศึกษา (SAR) ประจำปีการศึกษา ${academicYear}</h1>
-        <h2>โรงเรียน${schoolName} สพป.พัทลุง เขต 1</h2>
+        <h2>โรงเรียน${schoolName} สพป.พัทลุง เขต 2</h2>
         <p style="text-align: center; font-size: 14pt; color: #475569;">
           ชั้น${classLevel} (นักเรียนจริง ${totalStudents} คน)
         </p>
@@ -637,7 +637,7 @@ export const SarDashboardTab: React.FC<Props> = ({
     let bodyHtml = `
       <div class="header-box">
         <h1>รายงานผลการประเมินตนเองของสถานศึกษา (SAR) ประจำปีการศึกษา ${academicYear}</h1>
-        <h2>โรงเรียน${schoolName} สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต 1</h2>
+        <h2>โรงเรียน${schoolName} สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต 2</h2>
         <p style="text-align: center; font-size: 15pt; font-weight: bold; color: #1e293b; margin-top: 4pt;">
           รายงานสรุปผลการดำเนินงานและผลสัมฤทธิ์ทางการเรียน ชั้น${classLevel}
         </p>
@@ -1375,7 +1375,7 @@ export const SarDashboardTab: React.FC<Props> = ({
                   <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Garuda_Emblem_of_Thailand.svg" alt="ตราครุฑ" className="w-16 h-16 mx-auto mb-2 opacity-95" />
                   <h1 className="text-base sm:text-lg font-bold tracking-wide">รายงานสรุปผลการประเมินคุณภาพผู้เรียน (มาตรฐานที่ ๑)</h1>
                   <h2 className="text-sm sm:text-base font-bold text-slate-800">ประกอบการจัดทำรายงานการประเมินตนเองของสถานศึกษา (SAR) ประจำปีการศึกษา {academicYear}</h2>
-                  <p className="text-xs text-slate-600">โรงเรียน{schoolName} • สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต ๑</p>
+                  <p className="text-xs text-slate-600">โรงเรียน{schoolName} • สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต ๒</p>
                   <p className="text-[11px] text-slate-500 italic mt-0.5">ชั้น{classLevel} • จำนวนนักเรียนทั้งสิ้น {totalStudents} คน</p>
                 </div>
 

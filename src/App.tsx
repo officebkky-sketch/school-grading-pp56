@@ -76,11 +76,16 @@ export const App: React.FC = () => {
   // Teacher Authentication & Scoping State
   const [authUser, setAuthUser] = useState<AuthenticatedUser | null>(() => AuthService.getCurrentUser());
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
-    // เมื่อเปิดโปรแกรมเดสก์ท็อป/เว็บขึ้นมา ให้แสดงหน้าต่างเข้าสู่ระบบ/เลือกครูผู้สอนก่อนเสมอ
+    // เมื่อเปิดโปรแกรมเดสก์ท็อป/เว็บขึ้นมา ให้ตรวจสอบระบบจดจำการเข้าสู่ระบบอัตโนมัติ
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('mode') === 'portal' || params.has('nid') || params.has('sid')) {
         return false; // โหมดเช็คผลการเรียนนักเรียน/ผู้ปกครอง ไม่ต้องเด้ง Modal ครู
+      }
+      const remember = localStorage.getItem('pp5_remember_login') === 'true';
+      const user = AuthService.getCurrentUser();
+      if (remember && user) {
+        return false; // Desktop Auto-Login: จดจำการเข้าสู่ระบบ ไม่ต้องเปิดหน้าต่างซ้ำ
       }
     }
     return true;
@@ -626,7 +631,9 @@ export const App: React.FC = () => {
 
   const handleSignOut = async () => {
     await AuthService.signOut();
+    localStorage.removeItem('pp5_remember_login');
     setAuthUser(null);
+    setIsLoginModalOpen(true);
   };
 
   const handleSelectTeacher = (teacher: TeacherProfile) => {
@@ -1079,7 +1086,7 @@ export const App: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 print:p-0 print:m-0 print:max-w-none">
         {activeTab === 'roster' && (
           <ClassroomRosterTab
             students={currentStudents}
@@ -1158,6 +1165,10 @@ export const App: React.FC = () => {
               });
             }}
             canConfigureCalendar={currentTeacher?.role === 'academic_head' || currentTeacher?.role === 'director' || authUser?.role === 'admin'}
+            schoolName={config.schoolName}
+            homeroomTeacher={config.homeroomTeacher}
+            academicHeadName={academicHeadName}
+            directorName={config.directorName}
           />
         )}
 
@@ -1170,6 +1181,12 @@ export const App: React.FC = () => {
             onBulkUpdateHolistic={handleBulkUpdateHolistic}
             clubName={clubNameMap[config.classLevel] || ''}
             onUpdateClubName={handleUpdateClubName}
+            schoolName={config.schoolName}
+            academicYear={config.academicYear}
+            homeroomTeacher={config.homeroomTeacher}
+            directorName={config.directorName}
+            academicHeadName={academicHeadName}
+            logoUrl={schoolLogoUrl}
           />
         )}
 

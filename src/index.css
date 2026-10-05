@@ -8,24 +8,168 @@
 
 @media print {
   @page {
-    margin: 8mm;
+    size: A4 portrait;
+    margin: 0;
   }
-  body {
-    background: white !important;
-    color: black !important;
+  @page landscape-page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  .no-print {
+
+  /* ซ่อน Navigation, Header, Toolbar และองค์ประกอบที่ไม่ต้องการให้แสดงบนกระดาษ */
+  header, nav, aside, .no-print {
     display: none !important;
   }
+
+  /* ล้าง padding และ margin ของ Container ภายนอกทั้งหมด ป้องกันกรอบสีเทาและขอบกระดาษลอย */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* ล้างพื้นหลังสีเข้ม ขอบมน และขอบเงาของกรอบหน้าต่างพรีวิวโปรแกรม และ Modal ทุกชนิด */
+  .bg-slate-900\/70,
+  .bg-slate-900,
+  .bg-slate-800,
+  .bg-slate-200\/70,
+  .bg-slate-200\/60,
+  .bg-slate-200,
+  .bg-slate-100,
+  .bg-slate-50 {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* ล้าง Fixed Backdrop และ Modal Window ให้แผ่เรียบเป็นกระดาษ ไม่ติดกรอบหน้าต่างโปรแกรม */
+  .fixed.inset-0 {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    display: block !important;
+    z-index: auto !important;
+  }
+
+  .fixed.inset-0 > div {
+    max-width: 100% !important;
+    max-height: none !important;
+    width: 100% !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  .fixed.inset-0 > div > div {
+    overflow: visible !important;
+    max-height: none !important;
+    background: transparent !important;
+  }
+
+  /* แผ่นเอกสารพิมพ์มาตรฐาน A4 (ป้องกันการแตกหน้าและคุมขนาดเป๊ะ 100%) */
   .print-page {
     box-shadow: none !important;
     border: none !important;
-    page-break-after: always;
-    break-after: page;
-    width: 100% !important;
-    min-height: auto !important;
+    border-radius: 0 !important;
+    margin: 0 auto !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    box-sizing: border-box !important;
+  }
+
+  .print-portrait,
+  .print-page.w-\[210mm\],
+  .w-\[210mm\] {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    min-height: 0 !important;
+    padding: 7mm 9mm !important;
+    overflow: hidden !important;
+  }
+
+  .print-landscape,
+  .print-page.w-\[297mm\],
+  .w-\[297mm\] {
+    page: landscape-page !important;
+    width: 297mm !important;
+    max-width: 297mm !important;
+    height: 210mm !important;
+    max-height: 210mm !important;
+    min-height: 0 !important;
+    padding: 6mm 8mm !important;
+    overflow: hidden !important;
+  }
+
+  tr, .break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
+
+/* ======================================================== */
+/* CSS สำหรับหัวตารางแนวทแยง พร้อมเส้นแบ่งคอลัมน์ขนาน (Slanted Lanes) */
+/* ======================================================== */
+.th-diagonal {
+  height: 160px;
+  vertical-align: bottom;
+  padding-bottom: 6px;
+  position: relative;
+  overflow: visible;
+}
+.diagonal-line-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.diagonal-text {
+  transform: rotate(-60deg);
+  transform-origin: 0% 100%;
+  white-space: nowrap;
+  position: absolute;
+  bottom: 34px;
+  left: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: left !important;
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+
 

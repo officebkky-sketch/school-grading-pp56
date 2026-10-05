@@ -33,4 +33,6 @@ Thumbs.db
 
 # Local deploy scripts
 scripts/
+mockup_*
+test_diagonal.*
 

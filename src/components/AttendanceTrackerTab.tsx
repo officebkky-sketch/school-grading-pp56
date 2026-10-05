@@ -121,6 +121,10 @@ interface Props {
   onBulkUpdateAttendance?: (records: Record<string, AttendanceDetail>) => void;
   onUpdateTotalDays?: (semester: 1 | 2, days: number) => void;
   canConfigureCalendar?: boolean;
+  schoolName?: string;
+  homeroomTeacher?: string;
+  academicHeadName?: string;
+  directorName?: string;
 }
 
 export const AttendanceTrackerTab: React.FC<Props> = ({
@@ -132,7 +136,11 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
   onUpdateAttendance,
   onBulkUpdateAttendance,
   onUpdateTotalDays,
-  canConfigureCalendar = true
+  canConfigureCalendar = true,
+  schoolName = 'บ้านควนโคกยา',
+  homeroomTeacher = '',
+  academicHeadName = 'นางสาววัชรี พรหมช่วย',
+  directorName = 'นายเอกคณิต สิทธิศักดิ์'
 }) => {
   // Main Sub-Tab: 'monthly_matrix' (โหมดลงเวลารายเดือน) | 'summary' (ตารางสรุปสะสม & สิทธิ์สอบ) | 'calendar' (ปฏิทินการศึกษา)
   const [subTab, setSubTab] = useState<'monthly_matrix' | 'summary' | 'calendar'>('monthly_matrix');
@@ -535,9 +543,10 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
     : '0.0';
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner with Sub-Tab Navigation */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+    <>
+      <div className={`space-y-6 ${(isGridPrintModalOpen || isCalendarPrintModalOpen) ? 'print:hidden' : ''}`}>
+        {/* Top Banner with Sub-Tab Navigation */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
@@ -769,9 +778,9 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                 <thead className="bg-slate-50 text-slate-700 font-bold sticky top-0 z-20 shadow-2xs border-b border-slate-200">
                   {/* Row 1: Day of Month (1..31) */}
                   <tr>
-                    <th rowSpan={2} className="p-2 border-r border-slate-200 sticky left-0 bg-slate-100 z-30 w-10 text-center">ที่</th>
-                    <th rowSpan={2} className="p-2 border-r border-slate-200 sticky left-10 bg-slate-100 z-30 w-16 text-center font-mono">รหัส</th>
-                    <th rowSpan={2} className="p-2 text-left border-r border-slate-200 sticky left-26 bg-slate-100 z-30 min-w-[160px]">ชื่อ - นามสกุล</th>
+                    <th rowSpan={2} className="p-2 border-r border-slate-200 sticky left-0 bg-slate-100 z-30 w-12 min-w-12 max-w-12 text-center">ที่</th>
+                    <th rowSpan={2} className="p-2 border-r border-slate-200 sticky left-12 bg-slate-100 z-30 w-16 min-w-16 max-w-16 text-center font-mono">รหัส</th>
+                    <th rowSpan={2} className="p-2 text-left border-r-2 border-slate-300 sticky left-28 bg-slate-100 z-30 w-52 min-w-52 max-w-52 shadow-xs">ชื่อ - นามสกุล</th>
                     {monthDays.map(d => (
                       <th
                         key={d.day}
@@ -811,9 +820,9 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
 
                     return (
                       <tr key={s.id} className="hover:bg-slate-50/80 transition">
-                        <td className="p-2 border-r border-slate-200 font-mono font-bold text-slate-500 sticky left-0 bg-white z-10">{s.seq}</td>
-                        <td className="p-2 border-r border-slate-200 font-mono text-slate-400 sticky left-10 bg-white z-10">{s.studentId}</td>
-                        <td className="p-2 text-left border-r border-slate-200 font-bold text-slate-800 sticky left-26 bg-white z-10 shadow-xs whitespace-nowrap">
+                        <td className="p-2 border-r border-slate-200 font-mono font-bold text-slate-500 sticky left-0 bg-white z-10 w-12 min-w-12 max-w-12 text-center">{s.seq}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono text-slate-400 sticky left-12 bg-white z-10 w-16 min-w-16 max-w-16 text-center">{s.studentId}</td>
+                        <td className="p-2 text-left border-r-2 border-slate-300 font-bold text-slate-800 sticky left-28 bg-white z-10 shadow-xs whitespace-nowrap w-52 min-w-52 max-w-52 truncate">
                           {s.prefix}{s.firstName} {s.lastName}
                         </td>
                         {monthDays.map(d => {
@@ -865,7 +874,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                 {/* Summary Row at the Bottom */}
                 <tfoot className="bg-slate-100 text-[11px] font-bold text-slate-700 border-t-2 border-slate-300 sticky bottom-0">
                   <tr>
-                    <td colSpan={3} className="p-2 text-right border-r border-slate-200 sticky left-0 bg-slate-100 z-10">
+                    <td colSpan={3} className="p-2 text-right border-r-2 border-slate-300 sticky left-0 bg-slate-100 z-10 w-[320px] min-w-[320px]">
                       รวมมาเรียน (คน/วัน):
                     </td>
                     {monthDays.map(d => {
@@ -1429,13 +1438,14 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* ======================================================== */}
       {/* MODAL: พิมพ์บัญชีเวลาเรียน ปพ.5 A4 แนวนอน (ตราครุฑ) */}
       {/* ======================================================== */}
       {isGridPrintModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full my-8 overflow-hidden flex flex-col max-h-[95vh]">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:z-auto print:bg-transparent print:p-0 print:m-0 print:overflow-visible print:block">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full my-8 overflow-hidden flex flex-col max-h-[95vh] print:shadow-none print:border-none print:rounded-none print:max-h-none print:max-w-none print:w-full print:m-0 print:p-0 print:overflow-visible print:bg-transparent">
             <div className="bg-slate-800 text-white px-6 py-3.5 flex items-center justify-between no-print border-b border-slate-700 shrink-0">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-emerald-400" />
@@ -1455,25 +1465,34 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
               </div>
             </div>
 
-            <div className="p-6 overflow-y-auto bg-slate-200/60 flex justify-center">
-              <div className="bg-white w-full max-w-[297mm] min-h-[210mm] p-6 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed">
+            <div className="p-6 overflow-y-auto bg-slate-200/60 flex justify-center print:p-0 print:bg-transparent print:overflow-visible print:block">
+              <div className="bg-white w-full max-w-[297mm] min-h-[210mm] p-6 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed print:shadow-none print:border-none print:p-6 print-page print-landscape">
                 <div className="text-center space-y-1 mb-4">
                   <h1 className="text-sm font-bold">บัญชีลงเวลาเรียน ชั้น{classLevel} ประจำเดือน {THAI_MONTHS[selectedMonth]}</h1>
-                  <p className="text-[11px] text-slate-600">โรงเรียนบ้านควนโคกยา สพป.พัทลุง เขต 1 • วันทำการในเดือนนี้ {activeDays.length} วัน</p>
+                  <p className="text-[11px] text-slate-600">โรงเรียนบ้านควนโคกยา สพป.พัทลุง เขต 2 • รวมทั้งหมด {monthDays.length} วัน (วันทำการ {activeDays.length} วัน, วันหยุด {monthDays.length - activeDays.length} วัน)</p>
                 </div>
 
                 <table className="w-full text-center border-collapse border border-slate-400 text-[10px]">
                   <thead className="bg-slate-100 font-bold border-b border-slate-400">
                     <tr>
-                      <th className="p-1 border-r border-slate-400 w-8">ที่</th>
+                      <th className="p-1 border-r border-slate-400 w-7">ที่</th>
                       <th className="p-1 text-left border-r border-slate-400 min-w-[120px]">ชื่อ - สกุล</th>
-                      {activeDays.map(d => (
-                        <th key={d} className="p-0.5 border-r border-slate-400 w-5 font-mono">{d}</th>
+                      {monthDays.map(d => (
+                        <th
+                          key={d.day}
+                          className={`p-0.5 border-r border-slate-400 min-w-[18px] font-mono text-[9px] ${
+                            !d.isSchool ? (d.isWeekend ? 'bg-slate-200 text-slate-500' : 'bg-amber-100 text-amber-900') : ''
+                          }`}
+                          title={d.dateStr}
+                        >
+                          <div>{d.day}</div>
+                          <div className="text-[7px] font-normal leading-none">{d.dayLabel}</div>
+                        </th>
                       ))}
-                      <th className="p-1 border-r border-slate-400 w-10">มา</th>
-                      <th className="p-1 border-r border-slate-400 w-8">ลา</th>
-                      <th className="p-1 border-r border-slate-400 w-8">ป่วย</th>
-                      <th className="p-1 w-8">ขาด</th>
+                      <th className="p-1 border-r border-slate-400 w-8 bg-emerald-50 text-emerald-900">มา</th>
+                      <th className="p-1 border-r border-slate-400 w-7">ลา</th>
+                      <th className="p-1 border-r border-slate-400 w-7">ป่วย</th>
+                      <th className="p-1 w-7 text-rose-700">ขาด</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-300">
@@ -1482,17 +1501,30 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                       return (
                         <tr key={s.id}>
                           <td className="p-1 border-r border-slate-300 font-mono">{s.seq}</td>
-                          <td className="p-1 text-left border-r border-slate-300">{s.prefix}{s.firstName} {s.lastName}</td>
-                          {activeDays.map(d => {
-                            const dateKey = `${selectedMonth}-${String(d).padStart(2, '0')}`;
+                          <td className="p-1 text-left border-r border-slate-300 font-medium">{s.prefix}{s.firstName} {s.lastName}</td>
+                          {monthDays.map(d => {
+                            if (!d.isSchool) {
+                              return (
+                                <td
+                                  key={d.day}
+                                  className={`p-0.5 border-r border-slate-300 font-mono text-[8px] select-none ${
+                                    d.isWeekend ? 'bg-slate-100 text-slate-400' : 'bg-amber-50 text-amber-700 font-bold'
+                                  }`}
+                                  title={d.isWeekend ? 'วันหยุดสุดสัปดาห์' : 'วันหยุด'}
+                                >
+                                  {d.isWeekend ? '-' : 'หยุด'}
+                                </td>
+                              );
+                            }
+                            const dateKey = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
                             const st = (rec.dailyRecords || {})[dateKey] || 'present';
                             return (
-                              <td key={d} className="p-0.5 border-r border-slate-300 font-mono">
+                              <td key={d.day} className="p-0.5 border-r border-slate-300 font-mono">
                                 {st === 'present' ? '✓' : st === 'leave' ? 'ล' : st === 'sick' ? 'ป' : 'ข'}
                               </td>
                             );
                           })}
-                          <td className="p-1 border-r border-slate-300 font-mono font-bold">{rec.present}</td>
+                          <td className="p-1 border-r border-slate-300 font-mono font-bold text-emerald-800 bg-emerald-50/30">{rec.present}</td>
                           <td className="p-1 border-r border-slate-300 font-mono">{rec.leave}</td>
                           <td className="p-1 border-r border-slate-300 font-mono">{rec.sick}</td>
                           <td className="p-1 font-mono font-bold text-rose-700">{rec.absent}</td>
@@ -1501,6 +1533,25 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                     })}
                   </tbody>
                 </table>
+
+                {/* ส่วนสรุปและการลงนามประจำเดือน */}
+                <div className="mt-4 pt-3 border-t border-slate-300 grid grid-cols-3 text-center text-[10px]">
+                  <div>
+                    <div>ลงชื่อ...................................................... ครูประจำชั้น</div>
+                    <div className="font-semibold mt-0.5">({homeroomTeacher || 'ครูประจำชั้น'})</div>
+                    <div className="text-slate-500 text-[9px]">ครูประจำชั้นประถมศึกษาปีที่ {classLevel.replace('ป.', '')}</div>
+                  </div>
+                  <div>
+                    <div>ลงชื่อ...................................................... นายทะเบียน/วิชาการ</div>
+                    <div className="font-semibold mt-0.5">({academicHeadName || 'นางสาววัชรี พรหมช่วย'})</div>
+                    <div className="text-slate-500 text-[9px]">หัวหน้าฝ่ายวิชาการ</div>
+                  </div>
+                  <div>
+                    <div>ลงชื่อ...................................................... ผู้อำนวยการโรงเรียน</div>
+                    <div className="font-semibold mt-0.5">({directorName || 'นายเอกคณิต สิทธิศักดิ์'})</div>
+                    <div className="text-slate-500 text-[9px]">ผู้อำนวยการโรงเรียน{schoolName}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1511,8 +1562,8 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
       {/* MODAL: พิมพ์ปฏิทินการศึกษา A4 ทางการ (ตราครุฑ) */}
       {/* ======================================================== */}
       {isCalendarPrintModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8 overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:z-auto print:bg-transparent print:p-0 print:m-0 print:overflow-visible print:block">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8 overflow-hidden flex flex-col max-h-[92vh] print:shadow-none print:border-none print:rounded-none print:max-h-none print:max-w-none print:w-full print:m-0 print:p-0 print:overflow-visible print:bg-transparent">
             <div className="bg-slate-800 text-white px-6 py-3.5 flex items-center justify-between no-print border-b border-slate-700 shrink-0">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-emerald-400" />
@@ -1532,13 +1583,13 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
               </div>
             </div>
 
-            <div className="p-6 overflow-y-auto bg-slate-200/60 flex justify-center">
-              <div className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed">
+            <div className="p-6 overflow-y-auto bg-slate-200/60 flex justify-center print:p-0 print:bg-transparent print:overflow-visible print:block">
+              <div className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed print:shadow-none print:border-none print:p-6 print-page print-portrait">
                 <div className="text-center space-y-1 mb-6">
                   <img src="https://upload.wikimedia.org/wikipedia/commons/8/82/Garuda_Emblem_of_Thailand.svg" alt="ตราครุฑ" className="w-16 h-16 mx-auto mb-2 opacity-95" />
                   <h1 className="text-base font-bold">ปฏิทินการศึกษา ประจำปีการศึกษา ๒๕๖๙</h1>
                   <h2 className="text-sm font-bold text-slate-800">โรงเรียนบ้านควนโคกยา</h2>
-                  <p className="text-xs text-slate-600">สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต ๑</p>
+                  <p className="text-xs text-slate-600">สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต ๒</p>
                   <p className="text-[11px] text-slate-500 italic mt-0.5">(รวมเวลาเรียนทั้งสิ้น ๒๐๘ วันทำการ ตามระเบียบกระทรวงศึกษาธิการ)</p>
                 </div>
 
@@ -1576,6 +1627,6 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
