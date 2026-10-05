@@ -156,6 +156,99 @@ export const PrintableStudioTab: React.FC<Props> = ({
     return 'ดีเยี่ยม (3)';
   };
 
+  // Helper คำนวณสรุปเวลาเรียนและแจกแจงรายเดือน 11 เดือน สำหรับ ปพ.5 (ป้องกันวันติดลบ 100%)
+  const computeAttendanceBreakdown = (
+    att: AttendanceDetail | undefined,
+    configTotalDays: number = 208
+  ) => {
+    const safeAtt = att || { present: 208, leave: 0, sick: 0, absent: 0 };
+    const totalAttended = Number(safeAtt.present ?? 208);
+    const leaveCount = Number(safeAtt.leave ?? 0);
+    const sickCount = Number(safeAtt.sick ?? 0);
+    const absentCount = Number(safeAtt.absent ?? 0);
+    const totalRecorded = totalAttended + leaveCount + sickCount + absentCount;
+
+    const mDays = [11, 21, 21, 21, 22, 8, 21, 21, 20, 20, 22];
+    const mKeys = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
+    const studentMDays: number[] = new Array(11).fill(0);
+
+    const daily = safeAtt.dailyRecords || {};
+    const hasDaily = Object.keys(daily).length > 0;
+
+    if (hasDaily) {
+      let matchedPresent = 0;
+      mKeys.forEach((mKey, idx) => {
+        let pCount = 0;
+        Object.entries(daily).forEach(([dateStr, st]) => {
+          if (dateStr.startsWith(mKey)) {
+            if (st === 'present' || st === 'late') {
+              pCount++;
+            }
+          }
+        });
+        studentMDays[idx] = Math.min(mDays[idx], pCount);
+        matchedPresent += studentMDays[idx];
+      });
+
+      if (totalAttended > matchedPresent) {
+        let rem = totalAttended - matchedPresent;
+        for (let i = 0; i < 11 && rem > 0; i++) {
+          const cap = mDays[i];
+          const canAdd = Math.max(0, cap - studentMDays[i]);
+          const add = Math.min(rem, canAdd);
+          studentMDays[i] += add;
+          rem -= add;
+        }
+      }
+    } else {
+      if (totalAttended >= 190) {
+        const diff = Math.max(0, 208 - totalAttended);
+        for (let i = 0; i < 11; i++) {
+          studentMDays[i] = mDays[i];
+        }
+        let remDiff = diff;
+        for (let i = 1; i < 11 && remDiff > 0; i++) {
+          const deduct = Math.min(remDiff, Math.min(2, studentMDays[i]));
+          studentMDays[i] -= deduct;
+          remDiff -= deduct;
+        }
+        if (remDiff > 0) {
+          studentMDays[0] = Math.max(0, studentMDays[0] - remDiff);
+        }
+      } else {
+        let rem = totalAttended;
+        for (let i = 0; i < 11; i++) {
+          const cap = mDays[i];
+          const days = Math.min(cap, Math.max(0, rem));
+          studentMDays[i] = days;
+          rem -= days;
+        }
+      }
+    }
+
+    const effectiveTotalDays = (totalRecorded > 0 && totalRecorded < 180)
+      ? totalRecorded
+      : (configTotalDays || 208);
+
+    const attendedWithExcused = totalAttended + leaveCount + sickCount;
+    const rawPct = effectiveTotalDays > 0
+      ? Math.min(100, Math.round(((attendedWithExcused / effectiveTotalDays) * 100) * 10) / 10)
+      : 100.0;
+    const attPercent = rawPct.toFixed(1);
+    const isEligible = Number(attPercent) >= 80;
+
+    return {
+      studentMDays,
+      totalAttended,
+      leaveCount,
+      sickCount,
+      absentCount,
+      totalComputed: attendedWithExcused,
+      attPercent,
+      isEligible
+    };
+  };
+
   // ฟังก์ชันเรนเดอร์แผ่น ปพ.6 รายคน 1 แผ่น
   const renderPP6Card = (std: StudentProfile, isBatch = false) => {
     const att = attendanceData[std.studentId] || { present: 198, leave: 1, sick: 1, absent: 0 };
@@ -1109,18 +1202,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-mono text-[10px]">
                   {students.map((s) => {
-                    const att = attendanceData[s.studentId] || { present: 208, leave: 0, sick: 0, absent: 0 };
-                    const totalAttended = att.present ?? 208;
-                    const diff = Math.max(0, 208 - totalAttended);
-                    // คำนวณแจกแจงรายเดือน 11 เดือน
-                    const mDays = [11, 21, 21, 21, 22, 8, 21, 21, 20, 20, 22];
-                    const studentMDays = mDays.map((md, idx) => {
-                      if (diff > 0 && idx === 1) return md - diff; // หักจากเดือน มิ.ย. ตามกรณีมีลา/ขาด
-                      return md;
-                    });
-                    const totalDays = 208;
-                    const attPercent = (((totalAttended + att.leave + att.sick) / totalDays) * 100).toFixed(1);
-                    const isEligible = Number(attPercent) >= 80;
+                    const breakdown = computeAttendanceBreakdown(attendanceData[s.studentId], 208);
 
                     return (
                       <tr key={s.id} className="hover:bg-slate-50">
@@ -1130,20 +1212,20 @@ export const PrintableStudioTab: React.FC<Props> = ({
                           {s.prefix}{s.firstName} {s.lastName}
                         </td>
                         {/* 11 เดือน */}
-                        {studentMDays.map((d, dIdx) => (
+                        {breakdown.studentMDays.map((d, dIdx) => (
                           <td key={dIdx} className="p-0.5 border-r border-slate-300 font-mono">
                             {d}
                           </td>
                         ))}
                         {/* สรุปสถิติ */}
-                        <td className="p-1 border-r border-slate-300 font-bold text-emerald-800 bg-emerald-50">{totalAttended}</td>
-                        <td className="p-1 border-r border-slate-300">{att.leave || 0}</td>
-                        <td className="p-1 border-r border-slate-300">{att.sick || 0}</td>
-                        <td className="p-1 border-r border-slate-300 text-slate-400">{att.absent || 0}</td>
-                        <td className="p-1 border-r border-slate-300 font-bold bg-emerald-100 text-emerald-950">{totalAttended + (att.leave || 0) + (att.sick || 0)}</td>
-                        <td className="p-1 border-r border-slate-300 font-bold text-blue-900 bg-blue-50">{attPercent}%</td>
+                        <td className="p-1 border-r border-slate-300 font-bold text-emerald-800 bg-emerald-50">{breakdown.totalAttended}</td>
+                        <td className="p-1 border-r border-slate-300">{breakdown.leaveCount}</td>
+                        <td className="p-1 border-r border-slate-300">{breakdown.sickCount}</td>
+                        <td className="p-1 border-r border-slate-300 text-slate-400">{breakdown.absentCount}</td>
+                        <td className="p-1 border-r border-slate-300 font-bold bg-emerald-100 text-emerald-950">{breakdown.totalComputed}</td>
+                        <td className="p-1 border-r border-slate-300 font-bold text-blue-900 bg-blue-50">{breakdown.attPercent}%</td>
                         <td className="p-1 font-sans font-bold text-emerald-700 bg-emerald-50/50">
-                          {isEligible ? 'มีสิทธิ์สอบ (ปพ.5)' : 'หมดสิทธิ์สอบ'}
+                          {breakdown.isEligible ? 'มีสิทธิ์สอบ (ปพ.5)' : 'หมดสิทธิ์สอบ'}
                         </td>
                       </tr>
                     );
@@ -1607,28 +1689,22 @@ export const PrintableStudioTab: React.FC<Props> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-200 font-mono text-[10px]">
                     {students.map((s) => {
-                      const att = attendanceData[s.studentId] || { present: 208, leave: 0, sick: 0, absent: 0 };
-                      const totalAttended = att.present ?? 208;
-                      const diff = Math.max(0, 208 - totalAttended);
-                      const mDays = [11, 21, 21, 21, 22, 8, 21, 21, 20, 20, 22];
-                      const studentMDays = mDays.map((md, idx) => (diff > 0 && idx === 1 ? md - diff : md));
-                      const attPercent = (((totalAttended + att.leave + att.sick) / 208) * 100).toFixed(1);
-                      const isEligible = Number(attPercent) >= 80;
+                      const breakdown = computeAttendanceBreakdown(attendanceData[s.studentId], 208);
                       return (
                         <tr key={s.id} className="hover:bg-slate-50">
                           <td className="p-1 border-r border-slate-300 font-sans font-bold">{s.seq}</td>
                           <td className="p-1 border-r border-slate-300 text-slate-500">{s.studentId}</td>
                           <td className="p-1 text-left px-2 border-r border-slate-300 font-sans font-medium truncate">{s.prefix}{s.firstName} {s.lastName}</td>
-                          {studentMDays.map((d, dIdx) => (
+                          {breakdown.studentMDays.map((d, dIdx) => (
                             <td key={dIdx} className="p-0.5 border-r border-slate-300 font-mono">{d}</td>
                           ))}
-                          <td className="p-1 border-r border-slate-300 font-bold text-emerald-800 bg-emerald-50">{totalAttended}</td>
-                          <td className="p-1 border-r border-slate-300">{att.leave || 0}</td>
-                          <td className="p-1 border-r border-slate-300">{att.sick || 0}</td>
-                          <td className="p-1 border-r border-slate-300 text-slate-400">{att.absent || 0}</td>
-                          <td className="p-1 border-r border-slate-300 font-bold bg-emerald-100 text-emerald-950">{totalAttended + (att.leave || 0) + (att.sick || 0)}</td>
-                          <td className="p-1 border-r border-slate-300 font-bold text-blue-900 bg-blue-50">{attPercent}%</td>
-                          <td className="p-1 font-sans font-bold text-emerald-700 bg-emerald-50/50">{isEligible ? 'มีสิทธิ์สอบ (ปพ.5)' : 'หมดสิทธิ์สอบ'}</td>
+                          <td className="p-1 border-r border-slate-300 font-bold text-emerald-800 bg-emerald-50">{breakdown.totalAttended}</td>
+                          <td className="p-1 border-r border-slate-300">{breakdown.leaveCount}</td>
+                          <td className="p-1 border-r border-slate-300">{breakdown.sickCount}</td>
+                          <td className="p-1 border-r border-slate-300 text-slate-400">{breakdown.absentCount}</td>
+                          <td className="p-1 border-r border-slate-300 font-bold bg-emerald-100 text-emerald-950">{breakdown.totalComputed}</td>
+                          <td className="p-1 border-r border-slate-300 font-bold text-blue-900 bg-blue-50">{breakdown.attPercent}%</td>
+                          <td className="p-1 font-sans font-bold text-emerald-700 bg-emerald-50/50">{breakdown.isEligible ? 'มีสิทธิ์สอบ (ปพ.5)' : 'หมดสิทธิ์สอบ'}</td>
                         </tr>
                       );
                     })}

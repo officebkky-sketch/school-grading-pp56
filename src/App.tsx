@@ -500,6 +500,48 @@ export const App: React.FC = () => {
       });
     });
 
+    // 4. ดึงข้อมูลสรุปเวลาเรียนล่าสุด (student_attendance_summary) จาก Supabase Cloud
+    CloudSyncEngine.fetchAttendanceFromCloud(config.academicYear).then((cloudAtt) => {
+      if (!isSubscribed || !cloudAtt || Object.keys(cloudAtt).length === 0) return;
+      setAttendanceStore(prev => {
+        const merged = { ...prev };
+        Object.entries(cloudAtt).forEach(([studentId, attDetail]) => {
+          let foundCls: string | null = null;
+          for (const [cls, students] of Object.entries(classStudents)) {
+            if (students.some(s => s.studentId === studentId)) {
+              foundCls = cls;
+              break;
+            }
+          }
+          if (!foundCls) {
+            for (const [cls, students] of Object.entries(INITIAL_ROSTER)) {
+              if (students.some(s => s.studentId === studentId)) {
+                foundCls = cls;
+                break;
+              }
+            }
+          }
+          if (foundCls) {
+            if (!merged[foundCls]) merged[foundCls] = {};
+            const existing = merged[foundCls][studentId];
+            merged[foundCls][studentId] = {
+              present: attDetail.present,
+              leave: attDetail.leave,
+              sick: attDetail.sick,
+              absent: attDetail.absent,
+              late: existing?.late || 0,
+              dailyRecords: existing?.dailyRecords && Object.keys(existing.dailyRecords).length > 0
+                ? existing.dailyRecords
+                : (existing?.dailyRecords || {}),
+              monthlyRecords: existing?.monthlyRecords || {}
+            };
+          }
+        });
+        localStorage.setItem('pp5_attendance', JSON.stringify(merged));
+        return merged;
+      });
+    });
+
     return () => {
       isSubscribed = false;
     };
@@ -775,6 +817,7 @@ export const App: React.FC = () => {
 
     const currentSubs = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
     const currentStudents = classStudents[config.classLevel] || INITIAL_ROSTER[config.classLevel] || [];
+    const currentAttendance = attendanceStore[config.classLevel] || {};
 
     const timer = setTimeout(() => {
       CloudSyncEngine.autoSyncClassToCloud(
@@ -782,12 +825,37 @@ export const App: React.FC = () => {
         currentSubs,
         currentStudents,
         currentClassScores,
-        config
+        config,
+        currentAttendance
       );
     }, 2000);
 
     return () => clearTimeout(timer);
   }, [scoresStore, config.classLevel, config.academicYear]);
+
+  // Debounced Auto-Sync เมื่อครูลงเวลาเรียน (หน่วง 2 วินาทีหลังจากติ๊กหรือบันทึกเวลาเรียน)
+  useEffect(() => {
+    if (config.classLevel.startsWith('อ.')) return;
+    const currentAttendance = attendanceStore[config.classLevel];
+    if (!currentAttendance || Object.keys(currentAttendance).length === 0) return;
+
+    const currentSubs = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
+    const currentStudents = classStudents[config.classLevel] || INITIAL_ROSTER[config.classLevel] || [];
+    const currentClassScores = scoresStore[config.classLevel] || {};
+
+    const timer = setTimeout(() => {
+      CloudSyncEngine.autoSyncClassToCloud(
+        config.classLevel,
+        currentSubs,
+        currentStudents,
+        currentClassScores,
+        config,
+        currentAttendance
+      );
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [attendanceStore, config.classLevel, config.academicYear]);
 
   // Debounced Auto-Sync เมื่อครูปฐมวัยประเมินพัฒนาการ ๑๒ มาตรฐาน (หน่วง 2 วินาทีหลังจากบันทึก)
   useEffect(() => {
@@ -817,24 +885,66 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleUpdateAttendance = (studentId: string, data: AttendanceDetail) => {
-    setAttendanceStore(prev => ({
-      ...prev,
-      [config.classLevel]: {
-        ...(prev[config.classLevel] || {}),
-        [studentId]: data
+  const [isAttendanceSyncing, setIsAttendanceSyncing] = useState(false);
+  const handleAttendanceManualSync = async () => {
+    if (!canEditClass) {
+      alert('เฉพาะครูประจำชั้นของห้องนี้ หรือหัวหน้าวิชาการเท่านั้นที่สามารถซิงค์ข้อมูลขึ้นระบบได้');
+      return;
+    }
+    setIsAttendanceSyncing(true);
+    try {
+      const currentSubs = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
+      const currentStudents = classStudents[config.classLevel] || INITIAL_ROSTER[config.classLevel] || [];
+      const currentClassScores = scoresStore[config.classLevel] || {};
+      const currentAttendance = attendanceStore[config.classLevel] || {};
+
+      const result = await CloudSyncEngine.syncClassToCloud(
+        config.classLevel,
+        currentSubs,
+        currentStudents,
+        currentClassScores,
+        config,
+        currentAttendance
+      );
+
+      if (result.success) {
+        alert(`✓ ${result.message}`);
+      } else {
+        alert(`⚠️ ${result.message}`);
       }
-    }));
+    } catch (e: any) {
+      alert(`⚠️ เกิดข้อผิดพลาดในการซิงค์: ${e.message}`);
+    } finally {
+      setIsAttendanceSyncing(false);
+    }
+  };
+
+  const handleUpdateAttendance = (studentId: string, data: AttendanceDetail) => {
+    setAttendanceStore(prev => {
+      const updated = {
+        ...prev,
+        [config.classLevel]: {
+          ...(prev[config.classLevel] || {}),
+          [studentId]: data
+        }
+      };
+      localStorage.setItem('pp5_attendance', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleBulkUpdateAttendance = (records: Record<string, AttendanceDetail>) => {
-    setAttendanceStore(prev => ({
-      ...prev,
-      [config.classLevel]: {
-        ...(prev[config.classLevel] || {}),
-        ...records
-      }
-    }));
+    setAttendanceStore(prev => {
+      const updated = {
+        ...prev,
+        [config.classLevel]: {
+          ...(prev[config.classLevel] || {}),
+          ...records
+        }
+      };
+      localStorage.setItem('pp5_attendance', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleUpdateHolistic = (studentId: string, data: HolisticDetail) => {
@@ -1169,6 +1279,8 @@ export const App: React.FC = () => {
             homeroomTeacher={config.homeroomTeacher}
             academicHeadName={academicHeadName}
             directorName={config.directorName}
+            onManualSync={handleAttendanceManualSync}
+            isSyncing={isAttendanceSyncing}
           />
         )}
 

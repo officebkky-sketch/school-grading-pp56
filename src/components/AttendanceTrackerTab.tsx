@@ -20,7 +20,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Lock,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 
 export interface HolidayItem {
@@ -125,6 +126,8 @@ interface Props {
   homeroomTeacher?: string;
   academicHeadName?: string;
   directorName?: string;
+  onManualSync?: () => Promise<void>;
+  isSyncing?: boolean;
 }
 
 export const AttendanceTrackerTab: React.FC<Props> = ({
@@ -140,7 +143,9 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
   schoolName = 'บ้านควนโคกยา',
   homeroomTeacher = '',
   academicHeadName = 'นางสาววัชรี พรหมช่วย',
-  directorName = 'นายเอกคณิต สิทธิศักดิ์'
+  directorName = 'นายเอกคณิต สิทธิศักดิ์',
+  onManualSync,
+  isSyncing = false
 }) => {
   // Main Sub-Tab: 'monthly_matrix' (โหมดลงเวลารายเดือน) | 'summary' (ตารางสรุปสะสม & สิทธิ์สอบ) | 'calendar' (ปฏิทินการศึกษา)
   const [subTab, setSubTab] = useState<'monthly_matrix' | 'summary' | 'calendar'>('monthly_matrix');
@@ -489,11 +494,11 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
     let sick = r.sick ?? 0;
     let absent = r.absent ?? 0;
     let late = r.late ?? 0;
+    let hasScopeRecords = false;
 
     // หากมี dailyRecords ให้คำนวณจากบันทึกรายวันตามขอบเขต (Scope) ที่เลือกแบบเรียลไทม์
     if (r.dailyRecords && Object.keys(r.dailyRecords).length > 0) {
       let p = 0, l = 0, sk = 0, ab = 0, lt = 0;
-      let hasScopeRecords = false;
 
       Object.entries(r.dailyRecords).forEach(([dStr, st]) => {
         let inScope = false;
@@ -526,8 +531,16 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
       }
     }
 
-    const currentTotal = targetDays > 0 ? targetDays : (present + leave + sick + absent + late || 100);
-    const percent = currentTotal > 0 ? Math.min(100, Math.round((present / currentTotal) * 1000) / 10) : 0;
+    const totalRecordedDays = present + leave + sick + absent + late;
+    // หากอยู่ในช่วงระหว่างภาคเรียน (ยังลงเวลาไม่ครบ targetDays) ให้คิดเปอร์เซ็นต์เทียบกับวันที่ลงบันทึกจริง
+    const effectiveDenominator = (hasScopeRecords && totalRecordedDays > 0 && totalRecordedDays < targetDays)
+      ? totalRecordedDays
+      : (targetDays > 0 ? targetDays : 100);
+
+    const attendedWithExcused = present + leave + sick;
+    const percent = effectiveDenominator > 0
+      ? Math.min(100, Math.round(((attendedWithExcused / effectiveDenominator) * 100) * 10) / 10)
+      : 100.0;
     const isEligible = percent >= 80;
 
     return {
@@ -740,6 +753,18 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span>✓ ติ๊กมาทั้งเดือน (เฉพาะวันเปิดเรียน {activeDays.length} วัน)</span>
               </button>
+              {onManualSync && (
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={onManualSync}
+                  title="ซิงค์ข้อมูลเวลาเรียนขึ้นระบบคลาวด์โรงเรียนทันที"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-2xs disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'กำลังซิงค์...' : '☁️ ซิงค์เวลาเรียน'}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setIsGridPrintModalOpen(true)}

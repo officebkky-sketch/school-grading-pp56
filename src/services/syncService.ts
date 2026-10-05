@@ -633,6 +633,46 @@ export class CloudSyncEngine {
   private static isFlushingOutbox = false;
 
   /**
+   * ดึงข้อมูลสรุปเวลาเรียนจาก Supabase Cloud (student_attendance_summary)
+   * เพื่อ Rehydrate สถานะเวลาเรียนของทุกชั้นเรียน (ป.1 - ป.6) เมื่อเปิดแอปหรือซิงค์ข้อมูล
+   */
+  static async fetchAttendanceFromCloud(academicYear: string = '2569'): Promise<Record<string, AttendanceDetail> | null> {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('student_attendance_summary')
+        .select('*')
+        .eq('academic_year', academicYear);
+
+      if (error) {
+        console.warn('Cannot fetch attendance from cloud:', error);
+        return null;
+      }
+
+      if (!data || data.length === 0) return null;
+
+      const result: Record<string, AttendanceDetail> = {};
+      data.forEach((row: any) => {
+        result[row.student_id] = {
+          present: Number(row.present_days) || 0,
+          leave: Number(row.leave_days) || 0,
+          sick: Number(row.sick_days) || 0,
+          absent: Number(row.absent_days) || 0,
+          late: 0,
+          dailyRecords: {},
+          monthlyRecords: {}
+        };
+      });
+
+      return result;
+    } catch (e) {
+      console.warn('Exception in fetchAttendanceFromCloud:', e);
+      return null;
+    }
+  }
+
+  /**
    * ดึงข้อมูลคะแนนทั้งหมดจาก Supabase Cloud (On-Launch Rehydration)
    * เพื่อนำมาผสานเข้ากับ Local State ทันทีที่เปิดแอป
    */
@@ -887,13 +927,14 @@ export class CloudSyncEngine {
     subjects: SubjectConfig[],
     students: StudentProfile[],
     scores: Record<string, Record<string, StudentScoreRecord>>,
-    config: AcademicConfig
+    config: AcademicConfig,
+    attendanceRecords?: Record<string, AttendanceDetail>
   ): Promise<void> {
     const isOnline = typeof navigator === 'undefined' || navigator.onLine;
 
     if (isOnline && isSupabaseConfigured && supabase) {
       // ซิงค์ตรงแบบ background
-      this.syncClassToCloud(classLevel, subjects, students, scores, config)
+      this.syncClassToCloud(classLevel, subjects, students, scores, config, attendanceRecords)
         .catch(async () => {
           // หากเกิดข้อผิดพลาด ให้พักใส่ Outbox
           await this.queueClassToOutbox(classLevel, subjects, students, scores, config);

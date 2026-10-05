@@ -135,7 +135,10 @@ export const SarDashboardTab: React.FC<Props> = ({
 
   students.forEach(s => {
     const att = attendanceData[s.studentId] || { present: 97, leave: 1, sick: 2, absent: 0 };
-    const pct = totalSchoolDays > 0 ? (att.present / totalSchoolDays) * 100 : 96.5;
+    const totalRecorded = (att.present || 0) + (att.leave || 0) + (att.sick || 0) + (att.absent || 0);
+    const effectiveTotal = (totalRecorded > 0 && totalRecorded < 180) ? totalRecorded : (totalSchoolDays || 208);
+    const attended = (att.present || 0) + (att.leave || 0) + (att.sick || 0);
+    const pct = effectiveTotal > 0 ? Math.min(100, (attended / effectiveTotal) * 100) : 96.5;
     sumAttendancePct += pct;
     if (pct >= 80) eligibleCount++;
   });
