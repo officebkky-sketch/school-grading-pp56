@@ -1735,7 +1735,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
             <div className="bg-slate-800 text-white px-6 py-3.5 flex items-center justify-between no-print border-b border-slate-700 shrink-0">
               <div className="flex items-center gap-2">
                 <Printer className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-sm sm:text-base">พิมพ์แบบรายงานสรุปสถิติเวลาเรียนและสิทธิ์เข้าสอบ (A4 แนวนอน)</h3>
+                <h3 className="font-bold text-sm sm:text-base">พิมพ์แบบรายงานสรุปสถิติเวลาเรียนและสิทธิ์เข้าสอบ (A4 แนวตั้ง)</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1754,44 +1754,44 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Document Body (Printable A4 Landscape) */}
+            {/* Document Body (Printable A4 Portrait) */}
             <div className="p-6 overflow-y-auto bg-slate-200/60 flex justify-center print:p-0 print:bg-transparent print:overflow-visible print:block">
-              <div className="bg-white w-full max-w-[297mm] min-h-[210mm] p-8 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed print:shadow-none print:border-none print:p-6 print-page print-landscape flex flex-col justify-between">
+              <div className="bg-white w-full max-w-[210mm] min-h-[297mm] p-6 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed print:shadow-none print:border-none print:p-4 print-page print-portrait flex flex-col justify-between">
                 <div>
                   {/* Official Header */}
-                  <div className="text-center space-y-1 mb-4 border-b-2 border-slate-900 pb-2.5">
+                  <div className="text-center space-y-1 mb-3 border-b-2 border-slate-900 pb-2">
                     <img 
                       src="/garuda.png" 
                       alt="ตราครุฑ" 
-                      className="w-14 h-14 mx-auto mb-1 object-contain"
+                      className="w-12 h-12 mx-auto mb-1 object-contain"
                       onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                     />
-                    <h1 className="text-base font-bold text-slate-900">
+                    <h1 className="text-sm sm:text-base font-bold text-slate-900">
                       แบบรายงานสรุปสถิติเวลาเรียนและผลการตัดสินสิทธิ์เข้าสอบปลายภาคเรียน
                     </h1>
                     <h2 className="text-xs font-bold text-slate-700">
                       โรงเรียน{schoolName || 'บ้านควนโคกยา'} • ระดับชั้น{classLevel} • {scopeLabel} • ประจำปีการศึกษา ๒๕๖๙
                     </h2>
-                    <p className="text-[11px] text-slate-600">
+                    <p className="text-[10px] sm:text-[11px] text-slate-600">
                       สำนักงานเขตพื้นที่การศึกษาประถมศึกษาพัทลุง เขต ๒ • วันเปิดทำการเรียนการสอนรวม {targetDays} วัน (เกณฑ์ขั้นต่ำ ๘๐% คือไม่น้อยกว่า {Math.ceil(targetDays * 0.8)} วันทำการ)
                     </p>
                   </div>
 
                   {/* Summary Table */}
-                  <table className="w-full text-center border-collapse border border-slate-400 text-[10px]">
+                  <table className="w-full text-center border-collapse border border-slate-400 text-[9.5px]">
                     <thead className="bg-slate-100 font-bold border-b border-slate-400">
                       <tr>
-                        <th className="p-1.5 border-r border-slate-400 w-8">ที่</th>
-                        <th className="p-1.5 border-r border-slate-400 w-16 font-mono">รหัส</th>
-                        <th className="p-1.5 text-left px-2 border-r border-slate-400 min-w-[140px]">ชื่อ - สกุล</th>
-                        <th className="p-1.5 border-r border-slate-400 w-14 bg-emerald-50 text-emerald-900">มา (วัน)</th>
-                        <th className="p-1.5 border-r border-slate-400 w-12 bg-blue-50 text-blue-900">ลา (วัน)</th>
-                        <th className="p-1.5 border-r border-slate-400 w-12 bg-amber-50 text-amber-900">ป่วย (วัน)</th>
-                        <th className="p-1.5 border-r border-slate-400 w-12 bg-rose-50 text-rose-900">ขาด (วัน)</th>
-                        <th className="p-1.5 border-r border-slate-400 w-12 bg-purple-50 text-purple-900">สาย (ครั้ง)</th>
-                        <th className="p-1.5 border-r border-slate-400 w-14 bg-slate-200 text-slate-900">รวม (วัน)</th>
-                        <th className="p-1.5 border-r border-slate-400 w-16 bg-blue-100 text-blue-950 font-bold">ร้อยละ</th>
-                        <th className="p-1.5 w-28 font-bold">ผลสิทธิ์เข้าสอบ</th>
+                        <th className="p-1 border-r border-slate-400 w-7">ที่</th>
+                        <th className="p-1 border-r border-slate-400 w-14 font-mono">รหัส</th>
+                        <th className="p-1 text-left px-1.5 border-r border-slate-400">ชื่อ - สกุล</th>
+                        <th className="p-1 border-r border-slate-400 w-11 bg-emerald-50 text-emerald-900">มา</th>
+                        <th className="p-1 border-r border-slate-400 w-9 bg-blue-50 text-blue-900">ลา</th>
+                        <th className="p-1 border-r border-slate-400 w-9 bg-amber-50 text-amber-900">ป่วย</th>
+                        <th className="p-1 border-r border-slate-400 w-9 bg-rose-50 text-rose-900">ขาด</th>
+                        <th className="p-1 border-r border-slate-400 w-9 bg-purple-50 text-purple-900">สาย</th>
+                        <th className="p-1 border-r border-slate-400 w-11 bg-slate-200 text-slate-900">รวม</th>
+                        <th className="p-1 border-r border-slate-400 w-12 bg-blue-100 text-blue-950 font-bold">ร้อยละ</th>
+                        <th className="p-1 w-24 font-bold">ผลสิทธิ์สอบ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-300">
@@ -1824,31 +1824,31 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                     </tbody>
                     <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-400">
                       <tr>
-                        <td colSpan={3} className="p-1.5 text-center border-r border-slate-300">
+                        <td colSpan={3} className="p-1 text-center border-r border-slate-300">
                           รวม / เฉลี่ยทั้งห้อง ({evaluations.length} คน)
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 font-mono text-emerald-900">
+                        <td className="p-1 border-r border-slate-300 font-mono text-emerald-900">
                           {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + e.record.present, 0) / evaluations.length).toFixed(1) : 0}
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 font-mono text-blue-900">
+                        <td className="p-1 border-r border-slate-300 font-mono text-blue-900">
                           {evaluations.reduce((sum, e) => sum + e.record.leave, 0)}
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 font-mono text-amber-900">
+                        <td className="p-1 border-r border-slate-300 font-mono text-amber-900">
                           {evaluations.reduce((sum, e) => sum + e.record.sick, 0)}
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 font-mono text-rose-900">
+                        <td className="p-1 border-r border-slate-300 font-mono text-rose-900">
                           {evaluations.reduce((sum, e) => sum + e.record.absent, 0)}
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 font-mono text-purple-900">
+                        <td className="p-1 border-r border-slate-300 font-mono text-purple-900">
                           {evaluations.reduce((sum, e) => sum + (e.record.late || 0), 0)}
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 font-mono font-bold">
+                        <td className="p-1 border-r border-slate-300 font-mono font-bold">
                           {targetDays}
                         </td>
-                        <td className="p-1.5 border-r border-slate-300 font-mono text-slate-900">
+                        <td className="p-1 border-r border-slate-300 font-mono text-slate-900">
                           เฉลี่ย {avgPercent}%
                         </td>
-                        <td className="p-1.5 font-bold">
+                        <td className="p-1 font-bold">
                           <span className="text-emerald-700">มีสิทธิ์ {eligibleCount}</span>
                           {inEligibleCount > 0 && <span className="text-rose-700 ml-1">| มส. {inEligibleCount}</span>}
                         </td>
