@@ -44,18 +44,32 @@ const DEFAULT_HOLIDAYS: HolidayItem[] = [
   { id: 'h7', term: 2, date: '16 ม.ค. 2570', rawDate: '2027-01-16', name: 'วันครูแห่งชาติ', type: 'วันหยุดสถานศึกษา', isDefault: true },
 ];
 
-const THAI_MONTHS: Record<string, string> = {
-  '2026-05': 'พฤษภาคม 2569 (เปิด 16 พ.ค. • 12 วันทำการ)',
-  '2026-06': 'มิถุนายน 2569 (21 วันทำการ)',
-  '2026-07': 'กรกฎาคม 2569 (20 วันทำการ)',
-  '2026-08': 'สิงหาคม 2569 (21 วันทำการ)',
-  '2026-09': 'กันยายน 2569 (21 วันทำการ)',
-  '2026-10': 'ตุลาคม 2569 (ปิด 10 ต.ค. • 5 วันทำการ)',
-  '2026-11': 'พฤศจิกายน 2569 (21 วันทำการ)',
-  '2026-12': 'ธันวาคม 2569 (19 วันทำการ)',
-  '2027-01': 'มกราคม 2570 (21 วันทำการ)',
-  '2027-02': 'กุมภาพันธ์ 2570 (19 วันทำการ)',
-  '2027-03': 'มีนาคม 2570 (20 วันทำการ)'
+const MONTH_DEFINITIONS = [
+  { key: '2026-05', name: 'พฤษภาคม 2569', shortName: 'พ.ค.', term: 1, note: 'เปิด 16 พ.ค.' },
+  { key: '2026-06', name: 'มิถุนายน 2569', shortName: 'มิ.ย.', term: 1 },
+  { key: '2026-07', name: 'กรกฎาคม 2569', shortName: 'ก.ค.', term: 1 },
+  { key: '2026-08', name: 'สิงหาคม 2569', shortName: 'ส.ค.', term: 1 },
+  { key: '2026-09', name: 'กันยายน 2569', shortName: 'ก.ย.', term: 1 },
+  { key: '2026-10', name: 'ตุลาคม 2569', shortName: 'ต.ค.', term: 1, note: 'ปิด 10 ต.ค.' },
+  { key: '2026-11', name: 'พฤศจิกายน 2569', shortName: 'พ.ย.', term: 2 },
+  { key: '2026-12', name: 'ธันวาคม 2569', shortName: 'ธ.ค.', term: 2 },
+  { key: '2027-01', name: 'มกราคม 2570', shortName: 'ม.ค.', term: 2 },
+  { key: '2027-02', name: 'กุมภาพันธ์ 2570', shortName: 'ก.พ.', term: 2 },
+  { key: '2027-03', name: 'มีนาคม 2570', shortName: 'มี.ค.', term: 2 },
+];
+
+const THAI_MONTH_NAMES: Record<string, string> = {
+  '2026-05': 'พฤษภาคม 2569',
+  '2026-06': 'มิถุนายน 2569',
+  '2026-07': 'กรกฎาคม 2569',
+  '2026-08': 'สิงหาคม 2569',
+  '2026-09': 'กันยายน 2569',
+  '2026-10': 'ตุลาคม 2569',
+  '2026-11': 'พฤศจิกายน 2569',
+  '2026-12': 'ธันวาคม 2569',
+  '2027-01': 'มกราคม 2570',
+  '2027-02': 'กุมภาพันธ์ 2570',
+  '2027-03': 'มีนาคม 2570'
 };
 
 const THAI_DAYS_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
@@ -92,12 +106,12 @@ const DEFAULT_CALENDAR_SCHEDULE: CalendarScheduleConfig = {
   term1Midterm: '25 – 29 กรกฎาคม 2569',
   term1Final: '3 – 7 ตุลาคม 2569',
   term1MonthlyDays: {
-    may: 12,
+    may: 11,
     jun: 21,
-    jul: 20,
+    jul: 21,
     aug: 21,
-    sep: 21,
-    oct: 5
+    sep: 22,
+    oct: 8
   },
   term2StartDate: '2026-11-01',
   term2EndDate: '2027-03-31',
@@ -105,10 +119,10 @@ const DEFAULT_CALENDAR_SCHEDULE: CalendarScheduleConfig = {
   term2Final: '22 – 26 มีนาคม 2570',
   term2MonthlyDays: {
     nov: 21,
-    dec: 19,
-    jan: 21,
-    feb: 19,
-    mar: 20
+    dec: 21,
+    jan: 20,
+    feb: 20,
+    mar: 22
   }
 };
 
@@ -160,7 +174,18 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
   const [scheduleConfig, setScheduleConfig] = useState<CalendarScheduleConfig>(() => {
     const saved = localStorage.getItem('pp5_calendar_schedule');
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (!parsed.term1MonthlyDays?.sep || parsed.term1MonthlyDays?.sep === 21) {
+          return {
+            ...DEFAULT_CALENDAR_SCHEDULE,
+            ...parsed,
+            term1MonthlyDays: DEFAULT_CALENDAR_SCHEDULE.term1MonthlyDays,
+            term2MonthlyDays: DEFAULT_CALENDAR_SCHEDULE.term2MonthlyDays,
+          };
+        }
+        return parsed;
+      } catch {}
     }
     return DEFAULT_CALENDAR_SCHEDULE;
   });
@@ -244,6 +269,19 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
     const d = parseInt(parts[2], 10);
     if (isNaN(y) || isNaN(m) || isNaN(d)) return false;
     return isSchoolDay(y, m, d);
+  };
+
+  // คำนวณวันทำการจริงในแต่ละเดือนแบบไดนามิกตามปฏิทินและวันหยุดจริง
+  const getMonthSchoolDaysCount = (monthKey: string): number => {
+    const [yStr, mStr] = monthKey.split('-');
+    const y = parseInt(yStr, 10);
+    const m = parseInt(mStr, 10);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (isSchoolDay(y, m, d)) count++;
+    }
+    return count;
   };
 
   // ดึงรายการวันทั้งหมดในเดือนที่เลือก (1 ถึงสิ้นเดือน)
@@ -686,19 +724,26 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                   className="font-bold text-xs sm:text-sm text-slate-800 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 shadow-2xs focus:outline-hidden focus:border-emerald-500"
                 >
                   <optgroup label="ภาคเรียนที่ 1 / 2569">
-                    <option value="2026-05">พฤษภาคม 2569 (เปิด 16 พ.ค. • 12 วันทำการ)</option>
-                    <option value="2026-06">มิถุนายน 2569 (21 วันทำการ)</option>
-                    <option value="2026-07">กรกฎาคม 2569 (20 วันทำการ)</option>
-                    <option value="2026-08">สิงหาคม 2569 (21 วันทำการ)</option>
-                    <option value="2026-09">กันยายน 2569 (21 วันทำการ)</option>
-                    <option value="2026-10">ตุลาคม 2569 (ปิด 10 ต.ค. • 5 วันทำการ)</option>
+                    {MONTH_DEFINITIONS.filter(m => m.term === 1).map(m => {
+                      const daysCount = getMonthSchoolDaysCount(m.key);
+                      const noteText = m.note ? `${m.note} • ` : '';
+                      return (
+                        <option key={m.key} value={m.key}>
+                          {m.name} ({noteText}{daysCount} วันทำการ)
+                        </option>
+                      );
+                    })}
                   </optgroup>
                   <optgroup label="ภาคเรียนที่ 2 / 2569">
-                    <option value="2026-11">พฤศจิกายน 2569 (21 วันทำการ)</option>
-                    <option value="2026-12">ธันวาคม 2569 (19 วันทำการ)</option>
-                    <option value="2027-01">มกราคม 2570 (21 วันทำการ)</option>
-                    <option value="2027-02">กุมภาพันธ์ 2570 (19 วันทำการ)</option>
-                    <option value="2027-03">มีนาคม 2570 (20 วันทำการ)</option>
+                    {MONTH_DEFINITIONS.filter(m => m.term === 2).map(m => {
+                      const daysCount = getMonthSchoolDaysCount(m.key);
+                      const noteText = m.note ? `${m.note} • ` : '';
+                      return (
+                        <option key={m.key} value={m.key}>
+                          {m.name} ({noteText}{daysCount} วันทำการ)
+                        </option>
+                      );
+                    })}
                   </optgroup>
                 </select>
               </div>
@@ -1563,7 +1608,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
             <div className="p-6 overflow-y-auto bg-slate-200/60 flex justify-center print:p-0 print:bg-transparent print:overflow-visible print:block">
               <div className="bg-white w-full max-w-[297mm] min-h-[210mm] p-6 shadow-md border border-slate-200 text-slate-900 text-xs font-serif leading-relaxed print:shadow-none print:border-none print:p-6 print-page print-landscape">
                 <div className="text-center space-y-1 mb-4">
-                  <h1 className="text-sm font-bold">บัญชีลงเวลาเรียน ชั้น{classLevel} ประจำเดือน {THAI_MONTHS[selectedMonth]}</h1>
+                  <h1 className="text-sm font-bold">บัญชีลงเวลาเรียน ชั้น{classLevel} ประจำเดือน {THAI_MONTH_NAMES[selectedMonth] || selectedMonth}</h1>
                   <p className="text-[11px] text-slate-600">โรงเรียนบ้านควนโคกยา สพป.พัทลุง เขต 2 • รวมทั้งหมด {monthDays.length} วัน (วันทำการ {activeDays.length} วัน, วันหยุด {monthDays.length - activeDays.length} วัน)</p>
                 </div>
 
