@@ -136,6 +136,32 @@
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
+
+  /* รองรับหัวตารางแนวทแยงในโหมดพิมพ์ (Print Mode) ป้องกันข้อความและเส้นตัดขาด */
+  .th-diagonal,
+  .th-diagonal-print {
+    overflow: visible !important;
+    position: relative !important;
+    vertical-align: bottom !important;
+  }
+
+  .diagonal-line-svg {
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  .diagonal-text,
+  .diagonal-text-print {
+    display: inline-block !important;
+    -webkit-transform: rotate(-60deg) !important;
+    transform: rotate(-60deg) !important;
+    -webkit-transform-origin: 0% 100% !important;
+    transform-origin: 0% 100% !important;
+    white-space: nowrap !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 /* ======================================================== */
@@ -171,5 +197,28 @@
   pointer-events: none;
   transition: all 0.2s ease;
 }
+
+/* หัวตารางแนวทแยงสำหรับเอกสารพิมพ์ A4 Portrait โดยเฉพาะ */
+.th-diagonal-print {
+  height: 125px;
+  vertical-align: bottom;
+  padding-bottom: 4px;
+  position: relative;
+  overflow: visible !important;
+}
+.diagonal-text-print {
+  transform: rotate(-60deg);
+  transform-origin: 0% 100%;
+  white-space: nowrap;
+  position: absolute;
+  bottom: 24px;
+  left: 12px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: left !important;
+  pointer-events: none;
+}
+
 
 
