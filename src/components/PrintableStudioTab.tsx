@@ -164,7 +164,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
     termMode: 'year' | 'term1' | 'term2' = 'year'
   ) => {
     const safeAtt = att || { present: 208, leave: 0, sick: 0, absent: 0 };
-    const allMDays = [11, 21, 21, 21, 22, 8, 21, 21, 20, 20, 22];
+    const allMDays = [11, 21, 21, 20, 22, 9, 21, 21, 20, 20, 22];
     const allMKeys = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
     const allMLabels = ['พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.', 'ม.ค.', 'ก.พ.', 'มี.ค.'];
 
@@ -1246,9 +1246,9 @@ export const PrintableStudioTab: React.FC<Props> = ({
                         <th className="p-0.5 border-r border-slate-300 w-6">พ.ค.<br/><span className="text-slate-500 font-normal">11</span></th>
                         <th className="p-0.5 border-r border-slate-300 w-6">มิ.ย.<br/><span className="text-slate-500 font-normal">21</span></th>
                         <th className="p-0.5 border-r border-slate-300 w-6">ก.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
-                        <th className="p-0.5 border-r border-slate-300 w-6">ส.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ส.ค.<br/><span className="text-slate-500 font-normal">20</span></th>
                         <th className="p-0.5 border-r border-slate-300 w-6">ก.ย.<br/><span className="text-slate-500 font-normal">22</span></th>
-                        <th className="p-0.5 border-r border-slate-300 w-6">ต.ค.<br/><span className="text-slate-500 font-normal">8</span></th>
+                        <th className="p-0.5 border-r border-slate-300 w-6">ต.ค.<br/><span className="text-slate-500 font-normal">9</span></th>
                       </>
                     )}
                     {(attendanceTermMode === 'year' || attendanceTermMode === 'term2') && (
@@ -1749,9 +1749,9 @@ export const PrintableStudioTab: React.FC<Props> = ({
                       <th className="p-0.5 border-r border-slate-300 w-6">พ.ค.<br/><span className="text-slate-500 font-normal">11</span></th>
                       <th className="p-0.5 border-r border-slate-300 w-6">มิ.ย.<br/><span className="text-slate-500 font-normal">21</span></th>
                       <th className="p-0.5 border-r border-slate-300 w-6">ก.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
-                      <th className="p-0.5 border-r border-slate-300 w-6">ส.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
+                      <th className="p-0.5 border-r border-slate-300 w-6">ส.ค.<br/><span className="text-slate-500 font-normal">20</span></th>
                       <th className="p-0.5 border-r border-slate-300 w-6">ก.ย.<br/><span className="text-slate-500 font-normal">22</span></th>
-                      <th className="p-0.5 border-r border-slate-300 w-6">ต.ค.<br/><span className="text-slate-500 font-normal">8</span></th>
+                      <th className="p-0.5 border-r border-slate-300 w-6">ต.ค.<br/><span className="text-slate-500 font-normal">9</span></th>
                       <th className="p-0.5 border-r border-slate-300 w-6">พ.ย.<br/><span className="text-slate-500 font-normal">21</span></th>
                       <th className="p-0.5 border-r border-slate-300 w-6">ธ.ค.<br/><span className="text-slate-500 font-normal">21</span></th>
                       <th className="p-0.5 border-r border-slate-300 w-6">ม.ค.<br/><span className="text-slate-500 font-normal">20</span></th>

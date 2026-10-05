@@ -37,20 +37,22 @@ export interface HolidayItem {
 const DEFAULT_HOLIDAYS: HolidayItem[] = [
   { id: 'h1', term: 1, date: '3 มิ.ย. 2569', rawDate: '2026-06-03', name: 'วันเฉลิมฯ พระราชินี', type: 'วันหยุดราชการ', isDefault: true },
   { id: 'h2', term: 1, date: '28 ก.ค. 2569', rawDate: '2026-07-28', name: 'วันเฉลิมฯ รัชกาลที่ 10', type: 'วันหยุดราชการ', isDefault: true },
+  { id: 'h2_1', term: 1, date: '29 ก.ค. 2569', rawDate: '2026-07-29', name: 'วันอาสาฬหบูชา', type: 'วันหยุดราชการ', isDefault: true },
   { id: 'h3', term: 1, date: '12 ส.ค. 2569', rawDate: '2026-08-12', name: 'วันแม่แห่งชาติ', type: 'วันหยุดราชการ', isDefault: true },
   { id: 'h4', term: 2, date: '5 ธ.ค. 2569', rawDate: '2026-12-05', name: 'วันพ่อแห่งชาติ', type: 'วันหยุดราชการ', isDefault: true },
+  { id: 'h4_1', term: 2, date: '7 ธ.ค. 2569', rawDate: '2026-12-07', name: 'วันหยุดชดเชยวันพ่อแห่งชาติ', type: 'วันหยุดราชการ', isDefault: true },
   { id: 'h5', term: 2, date: '10 ธ.ค. 2569', rawDate: '2026-12-10', name: 'วันรัฐธรรมนูญ', type: 'วันหยุดราชการ', isDefault: true },
   { id: 'h6', term: 2, date: '1 ม.ค. 2570', rawDate: '2027-01-01', name: 'วันขึ้นปีใหม่', type: 'วันหยุดราชการ', isDefault: true },
   { id: 'h7', term: 2, date: '16 ม.ค. 2570', rawDate: '2027-01-16', name: 'วันครูแห่งชาติ', type: 'วันหยุดสถานศึกษา', isDefault: true },
 ];
 
 const MONTH_DEFINITIONS = [
-  { key: '2026-05', name: 'พฤษภาคม 2569', shortName: 'พ.ค.', term: 1, note: 'เปิด 16 พ.ค.' },
+  { key: '2026-05', name: 'พฤษภาคม 2569', shortName: 'พ.ค.', term: 1, note: 'เปิด 15 พ.ค.' },
   { key: '2026-06', name: 'มิถุนายน 2569', shortName: 'มิ.ย.', term: 1 },
   { key: '2026-07', name: 'กรกฎาคม 2569', shortName: 'ก.ค.', term: 1 },
   { key: '2026-08', name: 'สิงหาคม 2569', shortName: 'ส.ค.', term: 1 },
   { key: '2026-09', name: 'กันยายน 2569', shortName: 'ก.ย.', term: 1 },
-  { key: '2026-10', name: 'ตุลาคม 2569', shortName: 'ต.ค.', term: 1, note: 'ปิด 10 ต.ค.' },
+  { key: '2026-10', name: 'ตุลาคม 2569', shortName: 'ต.ค.', term: 1, note: 'ปิด 13 ต.ค.' },
   { key: '2026-11', name: 'พฤศจิกายน 2569', shortName: 'พ.ย.', term: 2 },
   { key: '2026-12', name: 'ธันวาคม 2569', shortName: 'ธ.ค.', term: 2 },
   { key: '2027-01', name: 'มกราคม 2570', shortName: 'ม.ค.', term: 2 },
@@ -101,20 +103,20 @@ export interface CalendarScheduleConfig {
 }
 
 const DEFAULT_CALENDAR_SCHEDULE: CalendarScheduleConfig = {
-  term1StartDate: '2026-05-16',
-  term1EndDate: '2026-10-10',
+  term1StartDate: '2026-05-15',
+  term1EndDate: '2026-10-13',
   term1Midterm: '25 – 29 กรกฎาคม 2569',
-  term1Final: '3 – 7 ตุลาคม 2569',
+  term1Final: '5 – 9 ตุลาคม 2569',
   term1MonthlyDays: {
     may: 11,
     jun: 21,
     jul: 21,
-    aug: 21,
+    aug: 20,
     sep: 22,
-    oct: 8
+    oct: 9
   },
   term2StartDate: '2026-11-01',
-  term2EndDate: '2027-03-31',
+  term2EndDate: '2027-03-30',
   term2Midterm: '11 – 15 มกราคม 2570',
   term2Final: '22 – 26 มีนาคม 2570',
   term2MonthlyDays: {
@@ -226,7 +228,15 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
   const [holidays, setHolidays] = useState<HolidayItem[]>(() => {
     const saved = localStorage.getItem('pp5_calendar_holidays');
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed = JSON.parse(saved);
+        const hasAsanha = parsed.some((h: any) => h.rawDate === '2026-07-29');
+        if (!hasAsanha) {
+          localStorage.setItem('pp5_calendar_holidays', JSON.stringify(DEFAULT_HOLIDAYS));
+          return DEFAULT_HOLIDAYS;
+        }
+        return parsed;
+      } catch {}
     }
     return DEFAULT_HOLIDAYS;
   });
