@@ -896,44 +896,34 @@ export const HolisticAssessmentTab: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Table with Slanted Diagonal Headers */}
+                  {/* Table — 2-Row Standard OBEC Header (แบบ สพฐ. 2 ชั้น) */}
                   <table className="w-full text-center border-collapse border border-slate-400 text-[10px]">
                     <thead className="bg-slate-50 text-slate-800 font-bold border-b border-slate-400">
+                      {/* ชั้นที่ 1 — หัวกลุ่ม */}
                       <tr>
-                        <th className="p-1 border-r border-slate-400 w-7 align-bottom pb-1.5 font-bold">ที่</th>
-                        <th className="p-1 border-r border-slate-400 w-12 align-bottom pb-1.5 font-bold font-mono">รหัส</th>
-                        <th className="p-1 text-left px-2 border-r border-slate-400 min-w-[125px] align-bottom pb-1.5 font-bold">ชื่อ - นามสกุล</th>
-                        {[
-                          { num: 1, thaiNum: '๑', label: '๑. รักชาติ ศาสน์ กษัตริย์' },
-                          { num: 2, thaiNum: '๒', label: '๒. ซื่อสัตย์สุจริต' },
-                          { num: 3, thaiNum: '๓', label: '๓. มีวินัย' },
-                          { num: 4, thaiNum: '๔', label: '๔. ใฝ่เรียนรู้' },
-                          { num: 5, thaiNum: '๕', label: '๕. อยู่อย่างพอเพียง' },
-                          { num: 6, thaiNum: '๖', label: '๖. มุ่งมั่นในการทำงาน' },
-                          { num: 7, thaiNum: '๗', label: '๗. รักความเป็นไทย' },
-                          { num: 8, thaiNum: '๘', label: '๘. มีจิตสาธารณะ' },
-                        ].map(item => (
-                          <th key={item.num} className="th-diagonal-print border-r border-slate-400 w-8 min-w-[32px] max-w-[32px]">
-                            <svg className="diagonal-line-svg">
-                              <line x1="32" y1="120" x2="101" y2="0" stroke="#94a3b8" strokeWidth="1" strokeDasharray="2 2" />
-                            </svg>
-                            <span className="diagonal-text-print">{item.label}</span>
-                            <div className="relative z-10">
-                              <span className="text-[9px] text-slate-700 font-bold bg-slate-100 px-1 py-0.5 rounded border border-slate-300">
-                                ข้อ {item.thaiNum}
-                              </span>
-                            </div>
-                          </th>
-                        ))}
-                        <th className="p-1 border-r border-slate-400 w-11 bg-slate-100/70 font-bold align-bottom pb-1.5">
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-7 font-bold">ที่</th>
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-12 font-bold font-mono">รหัส</th>
+                        <th rowSpan={2} className="p-1 text-left px-2 border-r border-b border-slate-400 min-w-[125px] font-bold">ชื่อ - นามสกุล</th>
+                        <th colSpan={8} className="p-1 border-r border-b border-slate-400 bg-blue-50 text-blue-900 font-bold text-[10px]">
+                          คุณลักษณะอันพึงประสงค์ ๘ ประการ
+                        </th>
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-11 bg-slate-100/70 font-bold">
                           รวม<br/><span className="text-[8px] font-normal">(๒๔)</span>
                         </th>
-                        <th className="p-1 border-r border-slate-400 w-11 bg-slate-100/70 font-bold align-bottom pb-1.5">
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-11 bg-slate-100/70 font-bold">
                           เฉลี่ย
                         </th>
-                        <th className="p-1 w-16 bg-emerald-50 font-bold align-bottom pb-1.5 text-emerald-900">
+                        <th rowSpan={2} className="p-1 border-b border-slate-400 w-16 bg-emerald-50 font-bold text-emerald-900">
                           ผลประเมิน
                         </th>
+                      </tr>
+                      {/* ชั้นที่ 2 — ข้อ ๑–๘ */}
+                      <tr>
+                        {['๑','๒','๓','๔','๕','๖','๗','๘'].map((n) => (
+                          <th key={n} className="p-1 border-r border-slate-400 w-8 font-bold text-[10px]">
+                            ข้อ {n}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-300 font-mono text-[10px]">
@@ -1024,41 +1014,34 @@ export const HolisticAssessmentTab: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Table with Slanted Diagonal Headers */}
+                  {/* Table — 2-Row Standard OBEC Header (แบบ สพฐ. 2 ชั้น) */}
                   <table className="w-full text-center border-collapse border border-slate-400 text-[10px]">
                     <thead className="bg-slate-50 text-slate-800 font-bold border-b border-slate-400">
+                      {/* ชั้นที่ 1 — หัวกลุ่ม */}
                       <tr>
-                        <th className="p-1 border-r border-slate-400 w-7 align-bottom pb-1.5 font-bold">ที่</th>
-                        <th className="p-1 border-r border-slate-400 w-12 align-bottom pb-1.5 font-bold font-mono">รหัส</th>
-                        <th className="p-1 text-left px-2 border-r border-slate-400 min-w-[125px] align-bottom pb-1.5 font-bold">ชื่อ - นามสกุล</th>
-                        {[
-                          { num: 1, thaiNum: '๑', label: '๑. การอ่านและจับใจความ' },
-                          { num: 2, thaiNum: '๒', label: '๒. ระบุแนวคิดสำคัญ' },
-                          { num: 3, thaiNum: '๓', label: '๓. เปรียบเทียบเชื่อมโยง' },
-                          { num: 4, thaiNum: '๔', label: '๔. แสดงความเห็นวิเคราะห์' },
-                          { num: 5, thaiNum: '๕', label: '๕. เขียนถ่ายทอดความคิด' },
-                        ].map(item => (
-                          <th key={item.num} className="th-diagonal-print border-r border-slate-400 w-11 min-w-[44px] max-w-[44px]">
-                            <svg className="diagonal-line-svg">
-                              <line x1="44" y1="120" x2="113" y2="0" stroke="#94a3b8" strokeWidth="1" strokeDasharray="2 2" />
-                            </svg>
-                            <span className="diagonal-text-print">{item.label}</span>
-                            <div className="relative z-10">
-                              <span className="text-[9px] text-slate-700 font-bold bg-slate-100 px-1 py-0.5 rounded border border-slate-300">
-                                ข้อ {item.thaiNum}
-                              </span>
-                            </div>
-                          </th>
-                        ))}
-                        <th className="p-1 border-r border-slate-400 w-11 bg-slate-100/70 font-bold align-bottom pb-1.5">
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-7 font-bold">ที่</th>
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-12 font-bold font-mono">รหัส</th>
+                        <th rowSpan={2} className="p-1 text-left px-2 border-r border-b border-slate-400 min-w-[125px] font-bold">ชื่อ - นามสกุล</th>
+                        <th colSpan={5} className="p-1 border-r border-b border-slate-400 bg-indigo-50 text-indigo-900 font-bold text-[10px]">
+                          การอ่าน คิดวิเคราะห์ และเขียน
+                        </th>
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-11 bg-slate-100/70 font-bold">
                           รวม<br/><span className="text-[8px] font-normal">(๑๕)</span>
                         </th>
-                        <th className="p-1 border-r border-slate-400 w-11 bg-slate-100/70 font-bold align-bottom pb-1.5">
+                        <th rowSpan={2} className="p-1 border-r border-b border-slate-400 w-11 bg-slate-100/70 font-bold">
                           เฉลี่ย
                         </th>
-                        <th className="p-1 w-16 bg-indigo-50 font-bold align-bottom pb-1.5 text-indigo-900">
+                        <th rowSpan={2} className="p-1 border-b border-slate-400 w-16 bg-indigo-50 font-bold text-indigo-900">
                           ผลตัดสิน
                         </th>
+                      </tr>
+                      {/* ชั้นที่ 2 — ข้อ ๑–๕ */}
+                      <tr>
+                        {['๑','๒','๓','๔','๕'].map((n) => (
+                          <th key={n} className="p-1 border-r border-slate-400 w-11 font-bold text-[10px]">
+                            ข้อ {n}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-300 font-mono text-[10px]">
