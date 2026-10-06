@@ -496,14 +496,22 @@ export const App: React.FC = () => {
         if (!isSubscribed || !cloudData) return;
         if (cloudData.scores && Object.keys(cloudData.scores).length > 0) {
         setScoresStore(prev => {
-          const merged = { ...prev };
+          const next: Record<string, Record<string, Record<string, StudentScoreRecord>>> =
+            typeof structuredClone === 'function' ? structuredClone(prev || {}) : JSON.parse(JSON.stringify(prev || {}));
+
           for (const [cls, subMap] of Object.entries(cloudData.scores)) {
-            if (!merged[cls]) merged[cls] = {};
+            if (!next[cls]) next[cls] = {};
             for (const [subId, stuMap] of Object.entries(subMap)) {
-              if (!merged[cls][subId]) merged[cls][subId] = {};
+              if (!next[cls][subId]) next[cls][subId] = {};
               for (const [stuId, cloudRec] of Object.entries(stuMap)) {
-                const localRec = merged[cls][subId][stuId];
-                const resolvedC1 = pickScore(cloudRec.c1, localRec?.c1);
+                const localRec = next[cls][subId][stuId];
+                const fallbackC1 = (cloudRec.formative1 !== null && cloudRec.formative1 !== undefined && !cloudRec.c2 && !cloudRec.c3 && !cloudRec.c4)
+                  ? Number(cloudRec.formative1)
+                  : (localRec?.c1 !== null && localRec?.c1 !== undefined
+                      ? Number(localRec.c1)
+                      : (localRec?.formative1 !== null && localRec?.formative1 !== undefined && !localRec?.c2 && !localRec?.c3 && !localRec?.c4 ? Number(localRec.formative1) : null));
+
+                const resolvedC1 = pickScore(cloudRec.c1, localRec?.c1) ?? fallbackC1;
                 const resolvedC2 = pickScore(cloudRec.c2, localRec?.c2);
                 const resolvedC3 = pickScore(cloudRec.c3, localRec?.c3);
                 const resolvedC4 = pickScore(cloudRec.c4, localRec?.c4);
@@ -520,7 +528,7 @@ export const App: React.FC = () => {
                 const hasPost = (resolvedC6 !== null) || (resolvedC7 !== null) || (resolvedC8 !== null) || (resolvedC9 !== null);
                 const sumPost = hasPost ? ((resolvedC6 ?? 0) + (resolvedC7 ?? 0) + (resolvedC8 ?? 0) + (resolvedC9 ?? 0)) : (cloudRec.formative2 ?? localRec?.formative2 ?? null);
 
-                merged[cls][subId][stuId] = {
+                next[cls][subId][stuId] = {
                   ...cloudRec,
                   c1: resolvedC1,
                   c2: resolvedC2,
@@ -549,17 +557,18 @@ export const App: React.FC = () => {
               }
             }
           }
-          localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(merged));
-          localStorage.setItem('pp5_scores', JSON.stringify(merged));
-          return merged;
+          localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(next));
+          localStorage.setItem('pp5_scores', JSON.stringify(next));
+          return next;
         });
       }
       if (cloudData.subjectsMap && Object.keys(cloudData.subjectsMap).length > 0) {
         setClassSubjects(prev => {
-          const merged: Record<string, SubjectConfig[]> = { ...prev };
+          const next: Record<string, SubjectConfig[]> =
+            typeof structuredClone === 'function' ? structuredClone(prev || {}) : JSON.parse(JSON.stringify(prev || {}));
           for (const [cls, cloudSubs] of Object.entries(cloudData.subjectsMap)) {
-            const existingList = merged[cls] || CLASS_SUBJECTS_MAP[cls] || [];
-            merged[cls] = existingList.map(existing => {
+            const existingList = next[cls] || CLASS_SUBJECTS_MAP[cls] || [];
+            next[cls] = existingList.map(existing => {
               const normCode = (existing.code || '').trim().toUpperCase();
               const cloudSub = (cloudSubs || []).find(cs => (cs.code && cs.code.trim().toUpperCase() === normCode) || cs.id === existing.id);
               const weights =
@@ -586,9 +595,9 @@ export const App: React.FC = () => {
               };
             });
           }
-          localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(merged));
-          localStorage.setItem('pp5_class_subjects', JSON.stringify(merged));
-          return merged;
+          localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(next));
+          localStorage.setItem('pp5_class_subjects', JSON.stringify(next));
+          return next;
         });
       }
       isCloudHydratedRef.current = true;
@@ -877,31 +886,78 @@ export const App: React.FC = () => {
   };
 
   const handlePullFromCloud = async () => {
+    // 1. ระบายคิว Outbox ที่อาจค้างอยู่จากการทำงานออฟไลน์ขึ้น Cloud ก่อน
+    await CloudSyncEngine.processPendingOutbox();
+
+    // 2. ดึงข้อมูลล่าสุดจาก Cloud
     const cloudData = await CloudSyncEngine.fetchAllScoresFromCloud(config.academicYear);
-    if (!cloudData) return;
+    if (!cloudData) {
+      throw new Error('ไม่สามารถดึงข้อมูลจากคลาวด์ได้ หรือยังไม่มีข้อมูลสำหรับปีการศึกษานี้');
+    }
+
     if (cloudData.scores && Object.keys(cloudData.scores).length > 0) {
       setScoresStore(prev => {
-        const merged = { ...prev };
+        const next: Record<string, Record<string, Record<string, StudentScoreRecord>>> =
+          typeof structuredClone === 'function' ? structuredClone(prev || {}) : JSON.parse(JSON.stringify(prev || {}));
+
         for (const [cls, subMap] of Object.entries(cloudData.scores)) {
-          if (!merged[cls]) merged[cls] = {};
+          if (!next[cls]) next[cls] = {};
           for (const [subId, stuMap] of Object.entries(subMap)) {
-            if (!merged[cls][subId]) merged[cls][subId] = {};
+            if (!next[cls][subId]) next[cls][subId] = {};
             for (const [stuId, cloudRec] of Object.entries(stuMap)) {
-              merged[cls][subId][stuId] = cloudRec;
+              const localRec = next[cls][subId][stuId];
+              const fallbackC1 = (cloudRec.formative1 !== null && cloudRec.formative1 !== undefined && !cloudRec.c2 && !cloudRec.c3 && !cloudRec.c4)
+                ? Number(cloudRec.formative1)
+                : (localRec?.c1 !== null && localRec?.c1 !== undefined
+                    ? Number(localRec.c1)
+                    : (localRec?.formative1 !== null && localRec?.formative1 !== undefined && !localRec?.c2 && !localRec?.c3 && !localRec?.c4 ? Number(localRec.formative1) : null));
+
+              const resolvedC1 = (cloudRec.c1 !== null && cloudRec.c1 !== undefined)
+                ? Number(cloudRec.c1)
+                : ((localRec?.c1 !== null && localRec?.c1 !== undefined) ? Number(localRec.c1) : fallbackC1);
+
+              const resolvedC5 = (cloudRec.c5 !== null && cloudRec.c5 !== undefined)
+                ? Number(cloudRec.c5)
+                : (cloudRec.midterm1 ?? localRec?.c5 ?? localRec?.midterm1 ?? null);
+
+              const resolvedC10 = (cloudRec.c10 !== null && cloudRec.c10 !== undefined)
+                ? Number(cloudRec.c10)
+                : (cloudRec.final2 ?? localRec?.c10 ?? localRec?.final2 ?? null);
+
+              const hasPre = (resolvedC1 !== null) || (cloudRec.c2 !== null) || (cloudRec.c3 !== null) || (cloudRec.c4 !== null);
+              const sumPre = hasPre
+                ? ((resolvedC1 ?? 0) + (cloudRec.c2 ?? 0) + (cloudRec.c3 ?? 0) + (cloudRec.c4 ?? 0))
+                : (cloudRec.formative1 ?? localRec?.formative1 ?? null);
+
+              next[cls][subId][stuId] = {
+                ...(localRec || {}),
+                ...cloudRec,
+                c1: resolvedC1,
+                c5: resolvedC5,
+                c10: resolvedC10,
+                cSumPre: sumPre,
+                formative1: sumPre,
+                midterm1: resolvedC5,
+                final2: resolvedC10,
+                total1: (sumPre !== null || resolvedC5 !== null) ? ((sumPre ?? 0) + (resolvedC5 ?? 0)) : null
+              };
             }
           }
         }
-        localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(merged));
-        localStorage.setItem('pp5_scores', JSON.stringify(merged));
-        return merged;
+        localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(next));
+        localStorage.setItem('pp5_scores', JSON.stringify(next));
+        return next;
       });
     }
+
     if (cloudData.subjectsMap && Object.keys(cloudData.subjectsMap).length > 0) {
       setClassSubjects(prev => {
-        const merged: Record<string, SubjectConfig[]> = { ...prev };
+        const next: Record<string, SubjectConfig[]> =
+          typeof structuredClone === 'function' ? structuredClone(prev || {}) : JSON.parse(JSON.stringify(prev || {}));
+
         for (const [cls, cloudSubs] of Object.entries(cloudData.subjectsMap)) {
-          const existingList = merged[cls] || CLASS_SUBJECTS_MAP[cls] || [];
-          merged[cls] = existingList.map(existing => {
+          const existingList = next[cls] || CLASS_SUBJECTS_MAP[cls] || [];
+          next[cls] = existingList.map(existing => {
             const normC = (existing.code || '').replace(/\s+/g, '').toUpperCase();
             const cloudSub = (cloudSubs || []).find(cs => (cs.code && (cs.code || '').replace(/\s+/g, '').toUpperCase() === normC) || cs.id === existing.id);
             const weights = cloudSub?.assessmentWeights || findSavedAssessmentWeights(cls, existing.code, existing.id) || existing.assessmentWeights;
@@ -911,7 +967,7 @@ export const App: React.FC = () => {
               return {
                 ...existing,
                 id: targetId,
-                assessmentWeights: weights,
+                assessmentWeights: { ...weights },
                 fullScoreTerm1: (weights.c1 + weights.c2 + weights.c3 + weights.c4) + weights.c5,
                 fullScoreTerm2: (weights.c6 + weights.c7 + weights.c8 + weights.c9) + weights.c10
               };
@@ -922,11 +978,12 @@ export const App: React.FC = () => {
             };
           });
         }
-        localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(merged));
-        localStorage.setItem('pp5_class_subjects', JSON.stringify(merged));
-        return merged;
+        localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(next));
+        localStorage.setItem('pp5_class_subjects', JSON.stringify(next));
+        return next;
       });
     }
+
     isCloudHydratedRef.current = true;
   };
 

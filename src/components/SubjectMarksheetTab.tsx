@@ -945,15 +945,22 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                   };
                   const cleanFirstName = extractCleanFirstName(s.prefix, s.firstName);
 
+                  // Smart effective c1 with fallback to formative1 if c1..c4 are empty
+                  const effectiveC1 = rec.c1 !== null && rec.c1 !== undefined
+                    ? rec.c1
+                    : (rec.formative1 !== null && rec.formative1 !== undefined && (rec.c2 === null || rec.c2 === undefined) && (rec.c3 === null || rec.c3 === undefined) && (rec.c4 === null || rec.c4 === undefined)
+                        ? rec.formative1
+                        : null);
+
                   // Sum pre (c1..c4)
-                  const hasExplicitPre = (rec.c1 !== null && rec.c1 !== undefined) ||
+                  const hasExplicitPre = (effectiveC1 !== null) ||
                                          (rec.c2 !== null && rec.c2 !== undefined) ||
                                          (rec.c3 !== null && rec.c3 !== undefined) ||
                                          (rec.c4 !== null && rec.c4 !== undefined);
                   const sumPre = rec.cSumPre !== undefined && rec.cSumPre !== null
                     ? rec.cSumPre
                     : (hasExplicitPre
-                        ? ((rec.c1 ?? 0) + (rec.c2 ?? 0) + (rec.c3 ?? 0) + (rec.c4 ?? 0))
+                        ? ((effectiveC1 ?? 0) + (rec.c2 ?? 0) + (rec.c3 ?? 0) + (rec.c4 ?? 0))
                         : (rec.formative1 ?? 0));
 
                   // Midterm c5
@@ -1000,7 +1007,7 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                           min={0}
                           max={fullScores.c1}
                           disabled={!canEdit || isTerm1Locked}
-                          value={rec.c1 ?? ''}
+                          value={effectiveC1 ?? ''}
                           placeholder="0"
                           title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : `เต็ม ${fullScores.c1}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c1', e.target.value)}
