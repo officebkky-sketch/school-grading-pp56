@@ -18,6 +18,7 @@ import {
   extractCleanFirstName
 } from '../utils/schoolMisExporter';
 import { getBasicSubjectSortWeight } from '../utils/subjectSortUtils';
+import { saveSubjectAssessmentWeights } from '../utils/weightStorage';
 import {
   BookOpen,
   BarChart3,
@@ -25,6 +26,7 @@ import {
   RotateCcw,
   Award,
   CheckCircle2,
+  RefreshCw,
   Plus,
   Trash2,
   Pencil,
@@ -53,6 +55,7 @@ interface Props {
   isTerm1Locked?: boolean;
   onToggleTerm1Lock?: () => void;
   canToggleLock?: boolean;
+  onForceSync?: () => Promise<void> | void;
 }
 
 export const SubjectMarksheetTab: React.FC<Props> = ({
@@ -69,7 +72,8 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   canEdit = true,
   isTerm1Locked = false,
   onToggleTerm1Lock,
-  canToggleLock = false
+  canToggleLock = false,
+  onForceSync
 }) => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   
@@ -242,6 +246,8 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   };
 
   const [isScoreConfigModalOpen, setIsScoreConfigModalOpen] = useState(false);
+  const [isSavingScores, setIsSavingScores] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   const handleSaveWeights = (newWeights: SubjectAssessmentWeights) => {
     if (!selectedSubject || !onUpdateSubject) return;
@@ -253,7 +259,25 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
       fullScoreTerm1: term1,
       fullScoreTerm2: term2
     };
+    // บันทึกลง Local-First Storage แบบถาวรทันที
+    saveSubjectAssessmentWeights(config.classLevel, selectedSubject.code, newWeights);
     onUpdateSubject(updated);
+  };
+
+  const handleManualSaveScores = async () => {
+    setIsSavingScores(true);
+    setSaveSuccessMsg(null);
+    try {
+      if (onForceSync) {
+        await onForceSync();
+      }
+      setSaveSuccessMsg('บันทึกคะแนนและข้อมูลลงระบบเรียบร้อยแล้ว');
+      setTimeout(() => setSaveSuccessMsg(null), 3500);
+    } catch (err: any) {
+      alert(`⚠️ เกิดข้อผิดพลาดในการบันทึก: ${err?.message || 'โปรดลองใหม่อีกครั้ง'}`);
+    } finally {
+      setIsSavingScores(false);
+    }
   };
 
   const handleSchoolMisScoreChange = (
@@ -566,6 +590,12 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                 {importStatus}
               </span>
             )}
+            {saveSuccessMsg && (
+              <span className="text-emerald-800 bg-emerald-100 border border-emerald-400 px-3 py-0.5 rounded-full font-bold shadow-xs animate-in fade-in flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{saveSuccessMsg}</span>
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -625,6 +655,36 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-100" />
               <span>ส่งออก SchoolMIS (.csv)</span>
+            </button>
+
+            {/* ปุ่มบันทึกข้อมูลคะแนนทันที (Instant Save & Force Cloud Sync) */}
+            <button
+              type="button"
+              disabled={!canEdit || isSavingScores}
+              onClick={handleManualSaveScores}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition shadow-xs ${
+                saveSuccessMsg
+                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-300'
+                  : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+              } ${!canEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
+              title="บันทึกคะแนนที่กรอกทั้งหมดลงเครื่องและฐานข้อมูลทันที ไม่ต้องรอระบบอัตโนมัติ"
+            >
+              {isSavingScores ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-200" />
+                  <span>กำลังบันทึก...</span>
+                </>
+              ) : saveSuccessMsg ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                  <span>บันทึกสำเร็จ!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>บันทึกคะแนน</span>
+                </>
+              )}
             </button>
 
             {/* ปุ่มล็อค / ปปลดล็อคคะแนนภาคเรียนที่ 1 */}

@@ -37,6 +37,28 @@ import { INITIAL_ATTENDANCE } from './data/initialAttendanceData';
 import { INITIAL_HOLISTIC } from './data/initialHolisticData';
 import { AnnouncementService, AnnouncementConfig } from './services/announcementService';
 import { CertificateVerifyPage } from './components/CertificateVerifyPage';
+import { findSavedAssessmentWeights, saveSubjectAssessmentWeights } from './utils/weightStorage';
+
+const hydrateSubjectsWithSavedWeights = (subjectsByClass: Record<string, SubjectConfig[]>): Record<string, SubjectConfig[]> => {
+  const hydrated: Record<string, SubjectConfig[]> = {};
+  for (const [cls, list] of Object.entries(subjectsByClass)) {
+    hydrated[cls] = (list || []).map(s => {
+      const weights = s.assessmentWeights || findSavedAssessmentWeights(cls, s.code, s.id);
+      if (weights) {
+        const term1 = (weights.c1 + weights.c2 + weights.c3 + weights.c4) + weights.c5;
+        const term2 = (weights.c6 + weights.c7 + weights.c8 + weights.c9) + weights.c10;
+        return {
+          ...s,
+          assessmentWeights: weights,
+          fullScoreTerm1: term1,
+          fullScoreTerm2: term2
+        };
+      }
+      return s;
+    });
+  }
+  return hydrated;
+};
 import {
   Users,
   BookOpen,
@@ -386,11 +408,11 @@ export const App: React.FC = () => {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-          return { ...CLASS_SUBJECTS_MAP, ...parsed };
+          return hydrateSubjectsWithSavedWeights({ ...CLASS_SUBJECTS_MAP, ...parsed });
         }
       } catch {}
     }
-    return CLASS_SUBJECTS_MAP;
+    return hydrateSubjectsWithSavedWeights(CLASS_SUBJECTS_MAP);
   });
 
   // Auto-persist academic config whenever it changes (e.g. academicYear, semester, classLevel)
@@ -406,7 +428,7 @@ export const App: React.FC = () => {
       try {
         const parsed = JSON.parse(cachedYearSubjects);
         if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-          setClassSubjects(prev => ({ ...CLASS_SUBJECTS_MAP, ...prev, ...parsed }));
+          setClassSubjects(prev => hydrateSubjectsWithSavedWeights({ ...CLASS_SUBJECTS_MAP, ...prev, ...parsed }));
         }
       } catch {}
     }
@@ -467,7 +489,34 @@ export const App: React.FC = () => {
             if (!merged[cls]) merged[cls] = {};
             for (const [subId, stuMap] of Object.entries(subMap)) {
               if (!merged[cls][subId]) merged[cls][subId] = {};
-              merged[cls][subId] = { ...merged[cls][subId], ...stuMap };
+              for (const [stuId, cloudRec] of Object.entries(stuMap)) {
+                const localRec = merged[cls][subId][stuId];
+                if (!localRec) {
+                  merged[cls][subId][stuId] = cloudRec;
+                } else {
+                  // Protected Local-First Merge: ป้องกันไม่ให้ Cloud Data ที่ไม่มีคะแนนย่อย 10 ครั้ง มาทับข้อมูลดิบที่ครูกรอกไว้
+                  merged[cls][subId][stuId] = {
+                    ...cloudRec,
+                    c1: localRec.c1 !== undefined ? localRec.c1 : cloudRec.c1,
+                    c2: localRec.c2 !== undefined ? localRec.c2 : cloudRec.c2,
+                    c3: localRec.c3 !== undefined ? localRec.c3 : cloudRec.c3,
+                    c4: localRec.c4 !== undefined ? localRec.c4 : cloudRec.c4,
+                    c5: localRec.c5 !== undefined ? localRec.c5 : (cloudRec.c5 ?? cloudRec.midterm1),
+                    cRetakeMidterm: localRec.cRetakeMidterm ?? cloudRec.cRetakeMidterm,
+                    c6: localRec.c6 !== undefined ? localRec.c6 : cloudRec.c6,
+                    c7: localRec.c7 !== undefined ? localRec.c7 : cloudRec.c7,
+                    c8: localRec.c8 !== undefined ? localRec.c8 : cloudRec.c8,
+                    c9: localRec.c9 !== undefined ? localRec.c9 : cloudRec.c9,
+                    c10: localRec.c10 !== undefined ? localRec.c10 : (cloudRec.c10 ?? cloudRec.final2),
+                    cSumPre: localRec.cSumPre !== undefined ? localRec.cSumPre : (cloudRec.cSumPre ?? cloudRec.formative1),
+                    cSumPost: localRec.cSumPost !== undefined ? localRec.cSumPost : (cloudRec.cSumPost ?? cloudRec.formative2),
+                    cSumFormative: localRec.cSumFormative !== undefined ? localRec.cSumFormative : cloudRec.cSumFormative,
+                    yearlyTotal: (cloudRec.yearlyTotal !== null && cloudRec.yearlyTotal !== undefined) ? cloudRec.yearlyTotal : localRec.yearlyTotal,
+                    grade: (cloudRec.grade && cloudRec.grade !== '-') ? cloudRec.grade : (localRec.grade || '-'),
+                    isPassed: cloudRec.isPassed ?? localRec.isPassed
+                  };
+                }
+              }
             }
           }
           localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(merged));
@@ -477,7 +526,36 @@ export const App: React.FC = () => {
       }
       if (cloudData.subjectsMap && Object.keys(cloudData.subjectsMap).length > 0) {
         setClassSubjects(prev => {
-          const merged = { ...prev, ...cloudData.subjectsMap };
+          const merged: Record<string, SubjectConfig[]> = { ...prev };
+          for (const [cls, cloudSubs] of Object.entries(cloudData.subjectsMap)) {
+            const existingList = merged[cls] || [];
+            const existingMap = new Map<string, SubjectConfig>();
+            existingList.forEach(s => {
+              if (s.id) existingMap.set(s.id, s);
+              if (s.code) existingMap.set(s.code.trim().toUpperCase(), s);
+            });
+
+            merged[cls] = (cloudSubs || []).map(cs => {
+              const normCode = (cs.code || '').trim().toUpperCase();
+              const existing = existingMap.get(cs.id) || existingMap.get(normCode);
+              const weights =
+                existing?.assessmentWeights ||
+                findSavedAssessmentWeights(cls, cs.code, cs.id) ||
+                cs.assessmentWeights;
+
+              if (weights) {
+                const term1 = (weights.c1 + weights.c2 + weights.c3 + weights.c4) + weights.c5;
+                const term2 = (weights.c6 + weights.c7 + weights.c8 + weights.c9) + weights.c10;
+                return {
+                  ...cs,
+                  assessmentWeights: weights,
+                  fullScoreTerm1: term1,
+                  fullScoreTerm2: term2
+                };
+              }
+              return cs;
+            });
+          }
           localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(merged));
           localStorage.setItem('pp5_class_subjects', JSON.stringify(merged));
           return merged;
@@ -724,6 +802,11 @@ export const App: React.FC = () => {
     localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(newState));
     localStorage.setItem('pp5_class_subjects', JSON.stringify(newState));
 
+    // บันทึกค่าน้ำหนักคะแนนเต็มลง LocalStorage แบบถาวร
+    if (updatedSub.assessmentWeights && updatedSub.code) {
+      saveSubjectAssessmentWeights(config.classLevel, updatedSub.code, updatedSub.assessmentWeights);
+    }
+
     const currentStudents = classStudents[config.classLevel] || [];
     const currentClassScores = scoresStore[config.classLevel] || {};
     CloudSyncEngine.autoSyncClassToCloud(
@@ -732,6 +815,29 @@ export const App: React.FC = () => {
       currentStudents,
       currentClassScores,
       config
+    );
+  };
+
+  const handleForceSyncScores = async () => {
+    const currentSubs = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
+    const currentStudents = classStudents[config.classLevel] || INITIAL_ROSTER[config.classLevel] || [];
+    const currentClassScores = scoresStore[config.classLevel] || {};
+    const currentAttendance = attendanceStore[config.classLevel] || {};
+
+    // 1. บันทึกลง LocalStorage ทันที (Instant Commit)
+    localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(scoresStore));
+    localStorage.setItem('pp5_scores', JSON.stringify(scoresStore));
+    localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(classSubjects));
+    localStorage.setItem('pp5_class_subjects', JSON.stringify(classSubjects));
+
+    // 2. Direct Sync ขึ้น Supabase Cloud ทันที (ไม่ต้องรอ 2 วินาที)
+    await CloudSyncEngine.autoSyncClassToCloud(
+      config.classLevel,
+      currentSubs,
+      currentStudents,
+      currentClassScores,
+      config,
+      currentAttendance
     );
   };
 
@@ -1232,6 +1338,7 @@ export const App: React.FC = () => {
               authUser?.role === 'academic_head' ||
               authUser?.role === 'admin'
             }
+            onForceSync={handleForceSyncScores}
           />
         )}
 
