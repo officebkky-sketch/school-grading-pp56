@@ -394,8 +394,8 @@ export const App: React.FC = () => {
 
   // Scores store: classLevel -> (subjectId -> (studentId -> scoreRecord))
   const [scoresStore, setScoresStore] = useState<Record<string, Record<string, Record<string, StudentScoreRecord>>>>(() => {
-    // Cache Sanitizer: ล้างข้อมูล Mock Placeholder เก่าที่คัดลอกคะแนนเทอม 1 ไปใส่เทอม 2 ในเครื่องผู้ใช้
-    const CACHE_CLEAN_KEY = 'pp5_scores_cleaned_v2';
+    // Cache Sanitizer: ล้างข้อมูล Mock Placeholder เก่าและเคลียร์คะแนนเทอม 2 ออกให้หมดจด
+    const CACHE_CLEAN_KEY = 'pp5_scores_cleaned_v3';
     if (typeof window !== 'undefined' && !localStorage.getItem(CACHE_CLEAN_KEY)) {
       try {
         localStorage.removeItem('pp5_scores');
