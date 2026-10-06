@@ -46,6 +46,32 @@ export interface StudentProfile {
   disadvantage: string;
 }
 
+export interface SubjectAssessmentWeights {
+  c1: number;  // ครั้งที่ 1 ก่อนกลางภาค (ค่าเริ่มต้น 10)
+  c2: number;  // ครั้งที่ 2 ก่อนกลางภาค (ค่าเริ่มต้น 10)
+  c3: number;  // ครั้งที่ 3 ก่อนกลางภาค (ค่าเริ่มต้น 10)
+  c4: number;  // ครั้งที่ 4 ก่อนกลางภาค (ค่าเริ่มต้น 5)
+  c5: number;  // ครั้งที่ 5 กลางภาค (ค่าเริ่มต้น 15)
+  c6: number;  // ครั้งที่ 6 หลังกลางภาค (ค่าเริ่มต้น 10)
+  c7: number;  // ครั้งที่ 7 หลังกลางภาค (ค่าเริ่มต้น 10)
+  c8: number;  // ครั้งที่ 8 หลังกลางภาค (ค่าเริ่มต้น 15)
+  c9: number;  // ครั้งที่ 9 หลังกลางภาค (ค่าเริ่มต้น 0)
+  c10: number; // ครั้งที่ 10 ปลายภาค (ค่าเริ่มต้น 15)
+}
+
+export const DEFAULT_SCHOOL_MIS_WEIGHTS: SubjectAssessmentWeights = {
+  c1: 10,
+  c2: 10,
+  c3: 10,
+  c4: 5,
+  c5: 15,
+  c6: 10,
+  c7: 10,
+  c8: 15,
+  c9: 0,
+  c10: 15
+};
+
 export interface SubjectConfig {
   id: string;
   code: string;         // เช่น "ท 11101"
@@ -56,6 +82,7 @@ export interface SubjectConfig {
   hoursPerYear: number; // ชม./ปี เช่น 160, 80
   fullScoreTerm1: number; // ปกติ 50 หรือ 100
   fullScoreTerm2: number; // ปกติ 50 หรือ 100
+  assessmentWeights?: SubjectAssessmentWeights; // สัดส่วนคะแนนเต็ม 10 ครั้ง แยกรายวิชา (School MIS Compatible)
 }
 
 export interface StudentScoreRecord {

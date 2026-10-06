@@ -28,6 +28,7 @@ tsconfig.tsbuildinfo
 # IDE & OS
 .vscode/
 .idea/
+scratch/
 .DS_Store
 Thumbs.db
 

@@ -1,6 +1,14 @@
 // src/components/SubjectMarksheetTab.tsx
 import React, { useState } from 'react';
-import { StudentProfile, SubjectConfig, StudentScoreRecord, AcademicConfig } from '../types/pp5Types';
+import {
+  StudentProfile,
+  SubjectConfig,
+  StudentScoreRecord,
+  AcademicConfig,
+  SubjectAssessmentWeights,
+  DEFAULT_SCHOOL_MIS_WEIGHTS
+} from '../types/pp5Types';
+import { SubjectScoreConfigModal } from './SubjectScoreConfigModal';
 import { GradingEngine } from '../engines/gradingEngine';
 import {
   exportSchoolMIS_SingleSubjectCSV,
@@ -212,23 +220,40 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   const [viewMode, setViewMode] = useState<'schoolmis' | 'semester'>('schoolmis');
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
-  // คะแนนเต็มแต่ละครั้งตามมาตรฐาน School MIS (ตรงกับสกรีนช็อต 100%)
+  // คะแนนเต็มแต่ละครั้งตามโครงสร้างรายวิชา (Default: School MIS 10,10,10,5 / 15 / 10,10,15,0 / 15)
+  const currentWeights: SubjectAssessmentWeights = selectedSubject?.assessmentWeights || DEFAULT_SCHOOL_MIS_WEIGHTS;
+
   const fullScores = {
-    c1: 10,
-    c2: 10,
-    c3: 10,
-    c4: 5,
-    cSumPre: 35,
-    c5: 15,
-    c6: 10,
-    c7: 10,
-    c8: 15,
-    c9: 0,
-    cSumPost: 35,
-    cSumFormative: 85,
-    c10: 15,
-    total: 100,
+    c1: currentWeights.c1,
+    c2: currentWeights.c2,
+    c3: currentWeights.c3,
+    c4: currentWeights.c4,
+    cSumPre: currentWeights.c1 + currentWeights.c2 + currentWeights.c3 + currentWeights.c4,
+    c5: currentWeights.c5,
+    c6: currentWeights.c6,
+    c7: currentWeights.c7,
+    c8: currentWeights.c8,
+    c9: currentWeights.c9,
+    cSumPost: currentWeights.c6 + currentWeights.c7 + currentWeights.c8 + currentWeights.c9,
+    cSumFormative: (currentWeights.c1 + currentWeights.c2 + currentWeights.c3 + currentWeights.c4) + currentWeights.c5 + (currentWeights.c6 + currentWeights.c7 + currentWeights.c8 + currentWeights.c9),
+    c10: currentWeights.c10,
+    total: (currentWeights.c1 + currentWeights.c2 + currentWeights.c3 + currentWeights.c4) + currentWeights.c5 + (currentWeights.c6 + currentWeights.c7 + currentWeights.c8 + currentWeights.c9) + currentWeights.c10,
     gpa: 4
+  };
+
+  const [isScoreConfigModalOpen, setIsScoreConfigModalOpen] = useState(false);
+
+  const handleSaveWeights = (newWeights: SubjectAssessmentWeights) => {
+    if (!selectedSubject || !onUpdateSubject) return;
+    const term1 = (newWeights.c1 + newWeights.c2 + newWeights.c3 + newWeights.c4) + newWeights.c5;
+    const term2 = (newWeights.c6 + newWeights.c7 + newWeights.c8 + newWeights.c9) + newWeights.c10;
+    const updated: SubjectConfig = {
+      ...selectedSubject,
+      assessmentWeights: newWeights,
+      fullScoreTerm1: term1,
+      fullScoreTerm2: term2
+    };
+    onUpdateSubject(updated);
   };
 
   const handleSchoolMisScoreChange = (
@@ -236,7 +261,8 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
     field: 'c1' | 'c2' | 'c3' | 'c4' | 'c5' | 'cRetakeMidterm' | 'c6' | 'c7' | 'c8' | 'c9' | 'c10',
     valStr: string
   ) => {
-    const num = valStr === '' ? null : Math.max(0, Math.min(100, Number(valStr)));
+    const maxVal = field === 'cRetakeMidterm' ? fullScores.c5 : (fullScores[field] ?? 100);
+    const num = valStr === '' ? null : Math.max(0, Math.min(maxVal, Number(valStr)));
     const existing = currentSubjectScores[studentId] || {
       studentId,
       formative1: null, midterm1: null, final1: null, total1: null,
@@ -397,13 +423,27 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                   เพิ่มวิชา
                 </button>
                 {onUpdateSubject && selectedSubject && (
-                  <button
-                    onClick={handleOpenEditModal}
-                    className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
-                    title="แก้ไขข้อมูลรายวิชานี้ (รหัส, ชื่อ, หน่วยกิต)"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      onClick={handleOpenEditModal}
+                      className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                      title="แก้ไขข้อมูลรายวิชานี้ (รหัส, ชื่อ, หน่วยกิต)"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsScoreConfigModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold rounded-lg shadow-xs transition"
+                      title="กำหนดคะแนนเต็ม 10 ครั้งแยกเฉพาะวิชานี้ (วิชาการ)"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>ตั้งคะแนนเต็ม</span>
+                      {selectedSubject.assessmentWeights && (
+                        <span className="w-2 h-2 rounded-full bg-indigo-600" title="ใช้น้ำหนักคะแนนกำหนดเฉพาะรายวิชา"></span>
+                      )}
+                    </button>
+                  </>
                 )}
                 {onDeleteSubject && subjects.length > 1 && (
                   <button
@@ -510,6 +550,15 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
             {selectedSubject && (
               <span className="px-3 py-1 bg-[#689f38] text-white text-xs font-bold rounded shadow-xs">
                 {selectedSubject.code.replace(/\s+/g, '')} {selectedSubject.name} ชั้น {config.classLevel} ห้อง {config.room} จำนวน {students.length} คน ลงทะเบียนแล้ว {students.length} คน ({config.academicYear}/{config.semester})
+              </span>
+            )}
+            {selectedSubject?.assessmentWeights ? (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-300 shadow-2xs flex items-center gap-1" title="สัดส่วนคะแนนเต็มกำหนดเฉพาะรายวิชา">
+                <span>⚙️ สัดส่วนเฉพาะวิชา ({fullScores.cSumPre}:{fullScores.c5}:{fullScores.cSumPost}:{fullScores.c10})</span>
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title="สัดส่วนคะแนนเต็มตามมาตรฐาน School MIS">
+                มาตรฐาน MIS (35:15:35:15)
               </span>
             )}
             {importStatus && (
@@ -842,11 +891,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={10}
+                          max={fullScores.c1}
                           disabled={!canEdit || isTerm1Locked}
                           value={rec.c1 ?? ''}
                           placeholder="0"
-                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : ""}
+                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : `เต็ม ${fullScores.c1}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c1', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             isTerm1Locked
@@ -860,11 +909,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={10}
+                          max={fullScores.c2}
                           disabled={!canEdit || isTerm1Locked}
                           value={rec.c2 ?? ''}
                           placeholder="0"
-                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : ""}
+                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : `เต็ม ${fullScores.c2}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c2', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             isTerm1Locked
@@ -878,11 +927,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={10}
+                          max={fullScores.c3}
                           disabled={!canEdit || isTerm1Locked}
                           value={rec.c3 ?? ''}
                           placeholder="0"
-                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : ""}
+                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : `เต็ม ${fullScores.c3}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c3', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             isTerm1Locked
@@ -896,11 +945,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={5}
+                          max={fullScores.c4}
                           disabled={!canEdit || isTerm1Locked}
                           value={rec.c4 ?? ''}
                           placeholder="0"
-                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : ""}
+                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : `เต็ม ${fullScores.c4}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c4', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             isTerm1Locked
@@ -921,11 +970,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={15}
+                          max={fullScores.c5}
                           disabled={!canEdit || isTerm1Locked}
                           value={rec.c5 ?? rec.midterm1 ?? ''}
                           placeholder="0"
-                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : ""}
+                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : `เต็ม ${fullScores.c5}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c5', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             isTerm1Locked
@@ -939,11 +988,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={15}
+                          max={fullScores.c5}
                           disabled={!canEdit || isTerm1Locked}
                           value={rec.cRetakeMidterm ?? ''}
                           placeholder="0"
-                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : ""}
+                          title={isTerm1Locked ? "ภาคเรียนที่ 1 ล็อคแล้ว" : `เต็ม ${fullScores.c5}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'cRetakeMidterm', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             isTerm1Locked
@@ -958,11 +1007,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={10}
+                          max={fullScores.c6}
                           disabled={!canEdit || semester === 1}
                           value={rec.c6 ?? ''}
                           placeholder={semester === 1 ? "-" : "0"}
-                          title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : ""}
+                          title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : `เต็ม ${fullScores.c6}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c6', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             semester === 1
@@ -976,11 +1025,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={10}
+                          max={fullScores.c7}
                           disabled={!canEdit || semester === 1}
                           value={rec.c7 ?? ''}
                           placeholder={semester === 1 ? "-" : "0"}
-                          title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : ""}
+                          title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : `เต็ม ${fullScores.c7}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c7', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             semester === 1
@@ -994,11 +1043,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={15}
+                          max={fullScores.c8}
                           disabled={!canEdit || semester === 1}
                           value={rec.c8 ?? ''}
                           placeholder={semester === 1 ? "-" : "0"}
-                          title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : ""}
+                          title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : `เต็ม ${fullScores.c8}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c8', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             semester === 1
@@ -1009,9 +1058,27 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                       </td>
                       {/* c9 */}
                       <td className="p-1 border border-slate-300">
-                        <div className={`w-full py-1 border rounded text-center min-h-[26px] ${
-                          semester === 1 ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-white border-slate-300 text-slate-400'
-                        }`}>-</div>
+                        {fullScores.c9 > 0 ? (
+                          <input
+                            type="number"
+                            min={0}
+                            max={fullScores.c9}
+                            disabled={!canEdit || semester === 1}
+                            value={rec.c9 ?? ''}
+                            placeholder={semester === 1 ? "-" : "0"}
+                            title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : `เต็ม ${fullScores.c9}`}
+                            onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c9', e.target.value)}
+                            className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
+                              semester === 1
+                                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'bg-white border-slate-300 text-slate-800'
+                            }`}
+                          />
+                        ) : (
+                          <div className={`w-full py-1 border rounded text-center min-h-[26px] ${
+                            semester === 1 ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-white border-slate-300 text-slate-400'
+                          }`}>-</div>
+                        )}
                       </td>
                       {/* รวมหลังกลาง */}
                       <td className="p-1 border border-slate-300 text-center">
@@ -1032,11 +1099,11 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                         <input
                           type="number"
                           min={0}
-                          max={15}
+                          max={fullScores.c10}
                           disabled={!canEdit || semester === 1}
                           value={rec.c10 ?? rec.final2 ?? ''}
                           placeholder={semester === 1 ? "-" : "0"}
-                          title={semester === 1 ? "คะแนนปลายภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : ""}
+                          title={semester === 1 ? "คะแนนปลายภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : `เต็ม ${fullScores.c10}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c10', e.target.value)}
                           className={`w-full text-center py-1 border rounded font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none ${
                             semester === 1
@@ -1516,6 +1583,16 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal กำหนดคะแนนเต็ม 10 ครั้งแยกเฉพาะรายวิชา (ฝ่ายวิชาการ) */}
+      {selectedSubject && (
+        <SubjectScoreConfigModal
+          isOpen={isScoreConfigModalOpen}
+          onClose={() => setIsScoreConfigModalOpen(false)}
+          subject={selectedSubject}
+          onSaveWeights={handleSaveWeights}
+        />
       )}
     </div>
   );
