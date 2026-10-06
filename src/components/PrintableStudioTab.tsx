@@ -215,7 +215,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
         pTerm += studentMDays[idx];
       });
 
-      if (termMode !== 'year' && hasTermSpecificRecords) {
+      if (hasTermSpecificRecords) {
         totalAttended = pTerm;
         leaveCount = lTerm;
         sickCount = sTerm;
@@ -279,10 +279,15 @@ export const PrintableStudioTab: React.FC<Props> = ({
 
   // ฟังก์ชันเรนเดอร์แผ่น ปพ.6 รายคน 1 แผ่น
   const renderPP6Card = (std: StudentProfile, isBatch = false) => {
-    const att = attendanceData[std.studentId] || { present: 198, leave: 1, sick: 1, absent: 0 };
-    const totalDays = att.present + att.leave + att.sick + att.absent || 200;
-    const attPercent = totalDays > 0 ? ((att.present / totalDays) * 100).toFixed(1) : '100.0';
-    const isEligible = Number(attPercent) >= 80;
+    const termMode = config.semester === 1 ? 'term1' : 'year';
+    const targetDaysCap = config.semester === 1 
+      ? (config.totalSchoolDaysSemester1 || 104) 
+      : ((config.totalSchoolDaysSemester1 || 104) + (config.totalSchoolDaysSemester2 || 104));
+    const breakdown = computeAttendanceBreakdown(attendanceData[std.studentId], targetDaysCap, termMode);
+    const totalDays = breakdown.totalComputed;
+    const presentDays = breakdown.totalAttended;
+    const attPercent = breakdown.attPercent;
+    const isEligible = breakdown.isEligible;
 
     const hol = holisticData[std.studentId] || {
       traitsScore: 3,
@@ -585,7 +590,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
                 <div className="space-y-1 print:space-y-0.5">
                   <div className="flex justify-between">
                     <span className="text-slate-600">• เวลาเรียนทั้งหมด:</span>
-                    <strong>{totalDays} วัน (มาเรียน {att.present} วัน)</strong>
+                    <strong>{totalDays} วัน (มาเรียน {presentDays} วัน)</strong>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-600">• คิดเป็นร้อยละ:</span>
@@ -912,7 +917,7 @@ export const PrintableStudioTab: React.FC<Props> = ({
 
                         {/* Yearly Total */}
                         <td className="p-1 font-bold border-r border-slate-300 bg-amber-50 text-amber-950">
-                          {rec?.yearlyTotal ?? rec?.total1 ?? '-'}
+                          {rec?.yearlyTotal !== null && rec?.yearlyTotal !== undefined ? rec.yearlyTotal : '-'}
                         </td>
                         <td className="p-1 font-extrabold border-r border-slate-300 text-emerald-900 bg-slate-50">
                           {grade}
@@ -1790,7 +1795,14 @@ export const PrintableStudioTab: React.FC<Props> = ({
                   <div className="bg-white p-2 rounded border border-slate-200">
                     <span className="font-bold text-slate-800 block mb-0.5">๑. สรุปสถิติเวลาเรียนและการตัดสินสิทธิ์เข้าสอบ:</span>
                     <p>• วันเปิดทำการตลอดปี รวมทั้งสิ้น <strong>๒๐๘ วันทำการ</strong> (เกณฑ์ ๘๐% คือไม่น้อยกว่า ๑๖๗ วัน)</p>
-                    <p>• นักเรียนมีเวลาเรียนครบเกณฑ์ร้อยละ ๘๐ จำนวน <strong>{students.length} คน คิดเป็นร้อยละ ๑๐๐</strong></p>
+                    {(() => {
+                      const eligibleList = students.filter(s => computeAttendanceBreakdown(attendanceData[s.studentId], 208).isEligible);
+                      const eligCount = eligibleList.length;
+                      const eligPct = students.length > 0 ? ((eligCount / students.length) * 100).toFixed(1) : '100.0';
+                      return (
+                        <p>• นักเรียนมีเวลาเรียนครบตามเกณฑ์ร้อยละ ๘๐ จำนวน <strong>{eligCount} คน จากทั้งหมด {students.length} คน (คิดเป็นร้อยละ {eligPct})</strong></p>
+                      );
+                    })()}
                   </div>
                   <div className="bg-white p-2 rounded border border-slate-200">
                     <span className="font-bold text-slate-800 block mb-0.5">๒. บันทึกพฤติกรรมการมาเรียน:</span>

@@ -393,10 +393,13 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
       if (dStr >= currentTermStart && dStr <= currentTermEnd) {
         if (checkIsSchoolDateStr(dStr)) {
           if (st === 'present') presentCount++;
+          else if (st === 'late') {
+            presentCount++;
+            lateCount++;
+          }
           else if (st === 'leave') leaveCount++;
           else if (st === 'sick') sickCount++;
           else if (st === 'absent') absentCount++;
-          else if (st === 'late') lateCount++;
         }
       }
     });
@@ -450,10 +453,13 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
         if (dStr >= currentTermStart && dStr <= currentTermEnd) {
           if (checkIsSchoolDateStr(dStr)) {
             if (st === 'present') presentCount++;
+            else if (st === 'late') {
+              presentCount++;
+              lateCount++;
+            }
             else if (st === 'leave') leaveCount++;
             else if (st === 'sick') sickCount++;
             else if (st === 'absent') absentCount++;
-            else if (st === 'late') lateCount++;
           }
         }
       });
@@ -573,10 +579,13 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
         if (inScope && checkIsSchoolDateStr(dStr)) {
           hasScopeRecords = true;
           if (st === 'present') p++;
+          else if (st === 'late') {
+            p++;
+            lt++;
+          }
           else if (st === 'leave') l++;
           else if (st === 'sick') sk++;
           else if (st === 'absent') ab++;
-          else if (st === 'late') lt++;
         }
       });
 
@@ -589,7 +598,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
       }
     }
 
-    const totalRecordedDays = present + leave + sick + absent + late;
+    const totalRecordedDays = present + leave + sick + absent;
     // หากอยู่ในช่วงระหว่างภาคเรียน (ยังลงเวลาไม่ครบ targetDays) ให้คิดเปอร์เซ็นต์เทียบกับวันที่ลงบันทึกจริง
     const effectiveDenominator = (totalRecordedDays > 0 && totalRecordedDays < targetDays)
       ? totalRecordedDays
@@ -922,8 +931,11 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                       const dateKey = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
                       const curStatus = daily[dateKey];
                       if (curStatus === 'present') monthPresent++;
+                      else if (curStatus === 'late') {
+                        monthPresent++;
+                        monthLate++;
+                      }
                       else if (curStatus === 'leave' || curStatus === 'sick') monthLeave++;
-                      else if (curStatus === 'late') monthLate++;
                       else if (curStatus === 'absent') monthAbsent++;
                     });
 
@@ -1000,7 +1012,7 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                       students.forEach(s => {
                         const st = (records[s.studentId]?.dailyRecords || {})[dateKey];
                         if (st) hasAnyRecord = true;
-                        if (st === 'present') presentTotal++;
+                        if (st === 'present' || st === 'late') presentTotal++;
                       });
                       return (
                         <td key={'foot-' + d.day} className="p-1 border-r border-slate-200 font-mono text-emerald-800 bg-emerald-50/50">
@@ -1020,9 +1032,9 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                         schoolDaysInMonth.forEach(d => {
                           const dateKey = `${selectedMonth}-${String(d.day).padStart(2, '0')}`;
                           const curStatus = daily[dateKey];
-                          if (curStatus === 'present') totalClassMonthPresent++;
+                          if (curStatus === 'present' || curStatus === 'late') totalClassMonthPresent++;
+                          if (curStatus === 'late') totalClassMonthLate++;
                           else if (curStatus === 'leave' || curStatus === 'sick') totalClassMonthLeave++;
-                          else if (curStatus === 'late') totalClassMonthLate++;
                           else if (curStatus === 'absent') totalClassMonthAbsent++;
                         });
                       });
@@ -1893,12 +1905,13 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                       })}
                     </tbody>
                     <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                      <tr>
-                        <td colSpan={3} className="p-1 text-center border-r border-slate-300">
-                          รวม / เฉลี่ยทั้งห้อง ({evaluations.length} คน)
+                      {/* แถวที่ 1: ผลรวมสะสมทั้งชั้นเรียน (คน-วัน) */}
+                      <tr className="border-b border-slate-300">
+                        <td colSpan={3} className="p-1 text-center border-r border-slate-300 bg-slate-200/60 text-slate-800">
+                          รวมสะสมทั้งชั้นเรียน ({evaluations.length} คน)
                         </td>
-                        <td className="p-1 border-r border-slate-300 font-mono text-emerald-900">
-                          {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + e.record.present, 0) / evaluations.length).toFixed(1) : 0}
+                        <td className="p-1 border-r border-slate-300 font-mono text-emerald-900 bg-emerald-100/50">
+                          {evaluations.reduce((sum, e) => sum + e.record.present, 0)}
                         </td>
                         <td className="p-1 border-r border-slate-300 font-mono text-blue-900">
                           {evaluations.reduce((sum, e) => sum + e.record.leave, 0)}
@@ -1912,15 +1925,45 @@ export const AttendanceTrackerTab: React.FC<Props> = ({
                         <td className="p-1 border-r border-slate-300 font-mono text-purple-900">
                           {evaluations.reduce((sum, e) => sum + (e.record.late || 0), 0)}
                         </td>
-                        <td className="p-1 border-r border-slate-300 font-mono font-bold">
+                        <td className="p-1 border-r border-slate-300 font-mono font-bold bg-slate-200/60">
+                          {evaluations.reduce((sum, e) => sum + ((e.record.present ?? 0) + (e.record.leave ?? 0) + (e.record.sick ?? 0) + (e.record.absent ?? 0)), 0)}
+                        </td>
+                        <td className="p-1 border-r border-slate-300 font-mono text-slate-700 bg-blue-50/50">
+                          -
+                        </td>
+                        <td className="p-1 font-bold text-emerald-800 bg-emerald-50/50">
+                          มีสิทธิ์ {eligibleCount} คน
+                        </td>
+                      </tr>
+                      {/* แถวที่ 2: ค่าเฉลี่ยต่อคน (วัน) */}
+                      <tr className="bg-slate-50 text-[9px]">
+                        <td colSpan={3} className="p-1 text-center border-r border-slate-300 font-medium text-slate-600">
+                          ค่าเฉลี่ยต่อคน (วันทำการ)
+                        </td>
+                        <td className="p-1 border-r border-slate-300 font-mono text-emerald-800">
+                          {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + e.record.present, 0) / evaluations.length).toFixed(1) : '0.0'}
+                        </td>
+                        <td className="p-1 border-r border-slate-300 font-mono text-blue-800">
+                          {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + e.record.leave, 0) / evaluations.length).toFixed(1) : '0.0'}
+                        </td>
+                        <td className="p-1 border-r border-slate-300 font-mono text-amber-800">
+                          {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + e.record.sick, 0) / evaluations.length).toFixed(1) : '0.0'}
+                        </td>
+                        <td className="p-1 border-r border-slate-300 font-mono text-rose-700">
+                          {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + e.record.absent, 0) / evaluations.length).toFixed(1) : '0.0'}
+                        </td>
+                        <td className="p-1 border-r border-slate-300 font-mono text-purple-700">
+                          {evaluations.length > 0 ? (evaluations.reduce((sum, e) => sum + (e.record.late || 0), 0) / evaluations.length).toFixed(1) : '0.0'}
+                        </td>
+                        <td className="p-1 border-r border-slate-300 font-mono font-bold text-slate-700">
                           {targetDays}
                         </td>
-                        <td className="p-1 border-r border-slate-300 font-mono text-slate-900">
-                          เฉลี่ย {avgPercent}%
+                        <td className="p-1 border-r border-slate-300 font-mono text-blue-900 font-bold bg-blue-100/50">
+                          {avgPercent}%
                         </td>
                         <td className="p-1 font-bold">
-                          <span className="text-emerald-700">มีสิทธิ์ {eligibleCount}</span>
-                          {inEligibleCount > 0 && <span className="text-rose-700 ml-1">| มส. {inEligibleCount}</span>}
+                          <span className="text-emerald-700">ร้อยละ {evaluations.length > 0 ? ((eligibleCount / evaluations.length) * 100).toFixed(1) : '0.0'}%</span>
+                          {inEligibleCount > 0 && <span className="text-rose-700 ml-1">(มส. {inEligibleCount})</span>}
                         </td>
                       </tr>
                     </tfoot>
