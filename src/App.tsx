@@ -1,6 +1,7 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { AcademicConfig, StudentProfile, StudentScoreRecord, SubjectConfig, AttendanceDetail, HolisticDetail } from './types/pp5Types';
+import { localDb } from './db/localDb';
 import { INITIAL_ROSTER } from './data/initialRosterData';
 import { CLASS_SUBJECTS_MAP } from './data/classSubjectsData';
 import { INITIAL_SCORES } from './data/initialScoresData';
@@ -395,11 +396,17 @@ export const App: React.FC = () => {
   // Scores store: classLevel -> (subjectId -> (studentId -> scoreRecord))
   const [scoresStore, setScoresStore] = useState<Record<string, Record<string, Record<string, StudentScoreRecord>>>>(() => {
     // Cache Sanitizer: ล้างแคชคะแนนตกค้างในเครื่องให้สะอาด 100% ตรงกับ Supabase Cloud
-    const CACHE_CLEAN_KEY = 'pp5_scores_cleaned_v5';
+    const CACHE_CLEAN_KEY = 'pp5_scores_cleaned_v10_permanent';
     if (typeof window !== 'undefined' && !localStorage.getItem(CACHE_CLEAN_KEY)) {
       try {
-        localStorage.removeItem('pp5_scores');
-        localStorage.removeItem('pp5_scores_2569');
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('pp5_scores') || k.startsWith('pp5_last_sync_'))) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
         localStorage.setItem(CACHE_CLEAN_KEY, 'true');
       } catch {}
       return INITIAL_SCORES;
@@ -433,6 +440,18 @@ export const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('pp5_config', JSON.stringify(config));
   }, [config]);
+
+  // Purge legacy outbox & grades queues in Dexie IndexedDB on v10
+  useEffect(() => {
+    const OUTBOX_CLEAN_KEY = 'pp5_outbox_cleaned_v10';
+    if (typeof window !== 'undefined' && !localStorage.getItem(OUTBOX_CLEAN_KEY)) {
+      try {
+        localDb.outbox.clear().catch(console.warn);
+        localDb.grades.clear().catch(console.warn);
+        localStorage.setItem(OUTBOX_CLEAN_KEY, 'true');
+      } catch {}
+    }
+  }, []);
 
   // Rehydrate scores & subjects from cloud whenever academicYear changes
   useEffect(() => {
@@ -506,73 +525,90 @@ export const App: React.FC = () => {
       CloudSyncEngine.fetchAllScoresFromCloud(config.academicYear).then((cloudData) => {
         if (!isSubscribed || !cloudData) return;
         if (cloudData.scores && Object.keys(cloudData.scores).length > 0) {
-        setScoresStore(prev => {
-          const next: Record<string, Record<string, Record<string, StudentScoreRecord>>> =
-            typeof structuredClone === 'function' ? structuredClone(prev || {}) : JSON.parse(JSON.stringify(prev || {}));
+          setScoresStore(prev => {
+            const next: Record<string, Record<string, Record<string, StudentScoreRecord>>> =
+              typeof structuredClone === 'function' ? structuredClone(prev || {}) : JSON.parse(JSON.stringify(prev || {}));
 
-          for (const [cls, subMap] of Object.entries(cloudData.scores)) {
-            if (!next[cls]) next[cls] = {};
-            for (const [subId, stuMap] of Object.entries(subMap)) {
-              if (!next[cls][subId]) next[cls][subId] = {};
-              for (const [stuId, cloudRec] of Object.entries(stuMap)) {
-                const localRec = next[cls][subId][stuId];
-                const fallbackC1 = (cloudRec.formative1 !== null && cloudRec.formative1 !== undefined && !cloudRec.c2 && !cloudRec.c3 && !cloudRec.c4)
-                  ? Number(cloudRec.formative1)
-                  : (localRec?.c1 !== null && localRec?.c1 !== undefined
-                      ? Number(localRec.c1)
-                      : (localRec?.formative1 !== null && localRec?.formative1 !== undefined && !localRec?.c2 && !localRec?.c3 && !localRec?.c4 ? Number(localRec.formative1) : null));
+            // ทำความสะอาดชั้นเรียนและวิชาที่ว่างเปล่าใน Cloud เพื่อไม่ให้ข้อมูลผีในเครื่องตกค้าง
+            availableClasses.forEach(cls => {
+              if (!cloudData.scores[cls] || Object.keys(cloudData.scores[cls]).length === 0) {
+                next[cls] = {};
+              } else if (next[cls]) {
+                for (const subId of Object.keys(next[cls])) {
+                  if (!cloudData.scores[cls][subId]) {
+                    delete next[cls][subId];
+                  }
+                }
+              }
+            });
 
-                const resolvedC1 = pickScore(cloudRec.c1, localRec?.c1) ?? fallbackC1;
-                const resolvedC2 = pickScore(cloudRec.c2, localRec?.c2);
-                const resolvedC3 = pickScore(cloudRec.c3, localRec?.c3);
-                const resolvedC4 = pickScore(cloudRec.c4, localRec?.c4);
-                const resolvedC5 = pickScore(cloudRec.c5 ?? cloudRec.midterm1, localRec?.c5 ?? localRec?.midterm1);
-                const resolvedRetake = pickScore(cloudRec.cRetakeMidterm, localRec?.cRetakeMidterm);
-                const resolvedC6 = pickScore(cloudRec.c6, localRec?.c6);
-                const resolvedC7 = pickScore(cloudRec.c7, localRec?.c7);
-                const resolvedC8 = pickScore(cloudRec.c8, localRec?.c8);
-                const resolvedC9 = pickScore(cloudRec.c9, localRec?.c9);
-                const resolvedC10 = pickScore(cloudRec.c10 ?? cloudRec.final2, localRec?.c10 ?? localRec?.final2);
+            for (const [cls, subMap] of Object.entries(cloudData.scores)) {
+              if (!next[cls]) next[cls] = {};
+              for (const [subId, stuMap] of Object.entries(subMap)) {
+                if (!next[cls][subId]) next[cls][subId] = {};
+                for (const [stuId, cloudRec] of Object.entries(stuMap)) {
+                  const localRec = next[cls][subId][stuId];
+                  const fallbackC1 = (cloudRec.formative1 !== null && cloudRec.formative1 !== undefined && !cloudRec.c2 && !cloudRec.c3 && !cloudRec.c4)
+                    ? Number(cloudRec.formative1)
+                    : (localRec?.c1 !== null && localRec?.c1 !== undefined
+                        ? Number(localRec.c1)
+                        : (localRec?.formative1 !== null && localRec?.formative1 !== undefined && !localRec?.c2 && !localRec?.c3 && !localRec?.c4 ? Number(localRec.formative1) : null));
 
-                const hasPre = (resolvedC1 !== null) || (resolvedC2 !== null) || (resolvedC3 !== null) || (resolvedC4 !== null);
-                const sumPre = hasPre ? ((resolvedC1 ?? 0) + (resolvedC2 ?? 0) + (resolvedC3 ?? 0) + (resolvedC4 ?? 0)) : (cloudRec.formative1 ?? localRec?.formative1 ?? null);
-                const hasPost = (resolvedC6 !== null) || (resolvedC7 !== null) || (resolvedC8 !== null) || (resolvedC9 !== null);
-                const sumPost = hasPost ? ((resolvedC6 ?? 0) + (resolvedC7 ?? 0) + (resolvedC8 ?? 0) + (resolvedC9 ?? 0)) : (cloudRec.formative2 ?? localRec?.formative2 ?? null);
+                  const resolvedC1 = pickScore(cloudRec.c1, localRec?.c1) ?? fallbackC1;
+                  const resolvedC2 = pickScore(cloudRec.c2, localRec?.c2);
+                  const resolvedC3 = pickScore(cloudRec.c3, localRec?.c3);
+                  const resolvedC4 = pickScore(cloudRec.c4, localRec?.c4);
+                  const resolvedC5 = pickScore(cloudRec.c5 ?? cloudRec.midterm1, localRec?.c5 ?? localRec?.midterm1);
+                  const resolvedRetake = pickScore(cloudRec.cRetakeMidterm, localRec?.cRetakeMidterm);
+                  const resolvedC6 = pickScore(cloudRec.c6, localRec?.c6);
+                  const resolvedC7 = pickScore(cloudRec.c7, localRec?.c7);
+                  const resolvedC8 = pickScore(cloudRec.c8, localRec?.c8);
+                  const resolvedC9 = pickScore(cloudRec.c9, localRec?.c9);
+                  const resolvedC10 = pickScore(cloudRec.c10 ?? cloudRec.final2, localRec?.c10 ?? localRec?.final2);
 
-                next[cls][subId][stuId] = {
-                  ...cloudRec,
-                  c1: resolvedC1,
-                  c2: resolvedC2,
-                  c3: resolvedC3,
-                  c4: resolvedC4,
-                  c5: resolvedC5,
-                  cRetakeMidterm: resolvedRetake,
-                  c6: resolvedC6,
-                  c7: resolvedC7,
-                  c8: resolvedC8,
-                  c9: resolvedC9,
-                  c10: resolvedC10,
-                  cSumPre: sumPre,
-                  cSumPost: sumPost,
-                  cSumFormative: (sumPre !== null ? sumPre : 0) + (resolvedC5 ?? 0) + (sumPost !== null ? sumPost : 0),
-                  formative1: sumPre,
-                  midterm1: resolvedC5,
-                  total1: (sumPre !== null || resolvedC5 !== null) ? ((sumPre ?? 0) + (resolvedC5 ?? 0)) : null,
-                  formative2: sumPost,
-                  final2: resolvedC10,
-                  total2: (sumPost !== null || resolvedC10 !== null) ? ((sumPost ?? 0) + (resolvedC10 ?? 0)) : null,
-                  yearlyTotal: cloudRec.yearlyTotal ?? localRec?.yearlyTotal ?? null,
-                  grade: (cloudRec.grade && cloudRec.grade !== '-') ? cloudRec.grade : (localRec?.grade || '-'),
-                  isPassed: cloudRec.isPassed ?? localRec?.isPassed ?? false
-                };
+                  const hasPre = (resolvedC1 !== null) || (resolvedC2 !== null) || (resolvedC3 !== null) || (resolvedC4 !== null);
+                  const sumPre = hasPre ? ((resolvedC1 ?? 0) + (resolvedC2 ?? 0) + (resolvedC3 ?? 0) + (resolvedC4 ?? 0)) : (cloudRec.formative1 ?? localRec?.formative1 ?? null);
+                  const hasPost = (resolvedC6 !== null) || (resolvedC7 !== null) || (resolvedC8 !== null) || (resolvedC9 !== null);
+                  const sumPost = hasPost ? ((resolvedC6 ?? 0) + (resolvedC7 ?? 0) + (resolvedC8 ?? 0) + (resolvedC9 ?? 0)) : (cloudRec.formative2 ?? localRec?.formative2 ?? null);
+
+                  next[cls][subId][stuId] = {
+                    ...cloudRec,
+                    c1: resolvedC1,
+                    c2: resolvedC2,
+                    c3: resolvedC3,
+                    c4: resolvedC4,
+                    c5: resolvedC5,
+                    cRetakeMidterm: resolvedRetake,
+                    c6: resolvedC6,
+                    c7: resolvedC7,
+                    c8: resolvedC8,
+                    c9: resolvedC9,
+                    c10: resolvedC10,
+                    cSumPre: sumPre,
+                    cSumPost: sumPost,
+                    cSumFormative: (sumPre !== null ? sumPre : 0) + (resolvedC5 ?? 0) + (sumPost !== null ? sumPost : 0),
+                    formative1: sumPre,
+                    midterm1: resolvedC5,
+                    total1: (sumPre !== null || resolvedC5 !== null) ? ((sumPre ?? 0) + (resolvedC5 ?? 0)) : null,
+                    formative2: sumPost,
+                    final2: resolvedC10,
+                    total2: (sumPost !== null || resolvedC10 !== null) ? ((sumPost ?? 0) + (resolvedC10 ?? 0)) : null,
+                    yearlyTotal: cloudRec.yearlyTotal ?? localRec?.yearlyTotal ?? null,
+                    grade: (cloudRec.grade && cloudRec.grade !== '-') ? cloudRec.grade : (localRec?.grade || '-'),
+                    isPassed: cloudRec.isPassed ?? localRec?.isPassed ?? false
+                  };
+                }
               }
             }
-          }
-          localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(next));
-          localStorage.setItem('pp5_scores', JSON.stringify(next));
-          return next;
-        });
-      }
+            localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(next));
+            localStorage.setItem('pp5_scores', JSON.stringify(next));
+            return next;
+          });
+        } else {
+          setScoresStore(INITIAL_SCORES);
+          localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(INITIAL_SCORES));
+          localStorage.setItem('pp5_scores', JSON.stringify(INITIAL_SCORES));
+        }
       if (cloudData.subjectsMap && Object.keys(cloudData.subjectsMap).length > 0) {
         setClassSubjects(prev => {
           const next: Record<string, SubjectConfig[]> =
@@ -911,6 +947,19 @@ export const App: React.FC = () => {
         const next: Record<string, Record<string, Record<string, StudentScoreRecord>>> =
           typeof structuredClone === 'function' ? structuredClone(prev || {}) : JSON.parse(JSON.stringify(prev || {}));
 
+        // ทำความสะอาดชั้นเรียนและวิชาที่ว่างเปล่าใน Cloud เพื่อไม่ให้ข้อมูลผีในเครื่องตกค้าง
+        availableClasses.forEach(cls => {
+          if (!cloudData.scores[cls] || Object.keys(cloudData.scores[cls]).length === 0) {
+            next[cls] = {};
+          } else if (next[cls]) {
+            for (const subId of Object.keys(next[cls])) {
+              if (!cloudData.scores[cls][subId]) {
+                delete next[cls][subId];
+              }
+            }
+          }
+        });
+
         for (const [cls, subMap] of Object.entries(cloudData.scores)) {
           if (!next[cls]) next[cls] = {};
           for (const [subId, stuMap] of Object.entries(subMap)) {
@@ -979,6 +1028,10 @@ export const App: React.FC = () => {
         localStorage.setItem('pp5_scores', JSON.stringify(next));
         return next;
       });
+    } else {
+      setScoresStore(INITIAL_SCORES);
+      localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(INITIAL_SCORES));
+      localStorage.setItem('pp5_scores', JSON.stringify(INITIAL_SCORES));
     }
 
     if (cloudData.subjectsMap && Object.keys(cloudData.subjectsMap).length > 0) {

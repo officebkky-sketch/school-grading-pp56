@@ -203,6 +203,8 @@ export class CloudSyncEngine {
           nCode ? scores[nCode] : undefined
         ].filter(Boolean) as Record<string, StudentScoreRecord>[];
 
+        let subjectHasScores = false;
+
         for (const s of students) {
           let rec: StudentScoreRecord | undefined = undefined;
           for (const m of candidateScoresMaps) {
@@ -214,6 +216,18 @@ export class CloudSyncEngine {
             }
           }
           if (!rec) continue;
+
+          // ตรวจสอบว่ามีคะแนนจริงหรือไม่ (ป้องกันการสร้าง mock row เปล่าๆ ขึ้น Cloud)
+          const hasScore = (rec.c1 !== null && rec.c1 !== undefined) ||
+                           (rec.c2 !== null && rec.c2 !== undefined) ||
+                           (rec.c3 !== null && rec.c3 !== undefined) ||
+                           (rec.c4 !== null && rec.c4 !== undefined) ||
+                           (rec.c5 !== null && rec.c5 !== undefined) ||
+                           (rec.formative1 !== null && rec.formative1 !== undefined) ||
+                           (rec.midterm1 !== null && rec.midterm1 !== undefined) ||
+                           (rec.final1 !== null && rec.final1 !== undefined);
+          if (!hasScore) continue;
+          subjectHasScores = true;
 
           // Encode 10-score records and custom weights into updated_by (Carrier Pattern)
           const baseTeacher = config.homeroomTeacher || 'ครูประจำชั้น';
@@ -266,6 +280,15 @@ export class CloudSyncEngine {
             updated_by: carrier,
             updated_at: new Date().toISOString()
           });
+        }
+
+        // หากวิชานี้ไม่มีการกรอกคะแนนใดๆ เลย ให้ลบข้อมูลคะแนนเก่าที่อาจค้างอยู่ใน Cloud ออก
+        if (!subjectHasScores) {
+          await supabase
+            .from('student_grades')
+            .delete()
+            .eq('subject_id', subDbId)
+            .eq('academic_year', config.academicYear);
         }
       }
 
@@ -1154,6 +1177,17 @@ export class CloudSyncEngine {
             }
           }
           if (!rec) continue;
+
+          // ตรวจสอบว่ามีคะแนนจริงหรือไม่ (ห้ามพัก mock row ว่างเปล่าลง Outbox)
+          const hasScore = (rec.c1 !== null && rec.c1 !== undefined) ||
+                           (rec.c2 !== null && rec.c2 !== undefined) ||
+                           (rec.c3 !== null && rec.c3 !== undefined) ||
+                           (rec.c4 !== null && rec.c4 !== undefined) ||
+                           (rec.c5 !== null && rec.c5 !== undefined) ||
+                           (rec.formative1 !== null && rec.formative1 !== undefined) ||
+                           (rec.midterm1 !== null && rec.midterm1 !== undefined) ||
+                           (rec.final1 !== null && rec.final1 !== undefined);
+          if (!hasScore) continue;
 
           // Encode 10-score records and custom weights into updated_by (Carrier Pattern)
           const baseTeacher = config.homeroomTeacher || 'ครูประจำชั้น';
