@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AcademicConfig, StudentProfile, StudentScoreRecord, SubjectConfig, AttendanceDetail, HolisticDetail } from './types/pp5Types';
 import { INITIAL_ROSTER } from './data/initialRosterData';
 import { CLASS_SUBJECTS_MAP } from './data/classSubjectsData';
@@ -263,6 +263,9 @@ export const App: React.FC = () => {
     const saved = localStorage.getItem('pp5_term1_locked');
     return saved ? JSON.parse(saved) : false;
   });
+
+  // Hydration Lock: ป้องกัน Auto-Sync ยิงทับ Supabase ก่อนดึงข้อมูลสดจาก Cloud เสร็จสมบูรณ์
+  const isCloudHydratedRef = useRef(false);
   const handleToggleTerm1Lock = () => {
     setIsTerm1Locked(prev => {
       const next = !prev;
@@ -480,6 +483,12 @@ export const App: React.FC = () => {
 
     // 2. ดึงข้อมูลคะแนนและรายวิชาล่าสุดของปีการศึกษานั้นจาก Supabase Cloud
     let isSubscribed = true;
+    const pickScore = (cloudVal: any, localVal: any) => {
+      if (cloudVal !== null && cloudVal !== undefined && cloudVal !== '') return Number(cloudVal);
+      if (localVal !== null && localVal !== undefined && localVal !== '') return Number(localVal);
+      return null;
+    };
+
     CloudSyncEngine.fetchAllScoresFromCloud(config.academicYear).then((cloudData) => {
       if (!isSubscribed || !cloudData) return;
       if (cloudData.scores && Object.keys(cloudData.scores).length > 0) {
@@ -491,31 +500,49 @@ export const App: React.FC = () => {
               if (!merged[cls][subId]) merged[cls][subId] = {};
               for (const [stuId, cloudRec] of Object.entries(stuMap)) {
                 const localRec = merged[cls][subId][stuId];
-                if (!localRec) {
-                  merged[cls][subId][stuId] = cloudRec;
-                } else {
-                  // Protected Local-First Merge: ป้องกันไม่ให้ Cloud Data ที่ไม่มีคะแนนย่อย 10 ครั้ง มาทับข้อมูลดิบที่ครูกรอกไว้
-                  merged[cls][subId][stuId] = {
-                    ...cloudRec,
-                    c1: localRec.c1 !== undefined ? localRec.c1 : cloudRec.c1,
-                    c2: localRec.c2 !== undefined ? localRec.c2 : cloudRec.c2,
-                    c3: localRec.c3 !== undefined ? localRec.c3 : cloudRec.c3,
-                    c4: localRec.c4 !== undefined ? localRec.c4 : cloudRec.c4,
-                    c5: localRec.c5 !== undefined ? localRec.c5 : (cloudRec.c5 ?? cloudRec.midterm1),
-                    cRetakeMidterm: localRec.cRetakeMidterm ?? cloudRec.cRetakeMidterm,
-                    c6: localRec.c6 !== undefined ? localRec.c6 : cloudRec.c6,
-                    c7: localRec.c7 !== undefined ? localRec.c7 : cloudRec.c7,
-                    c8: localRec.c8 !== undefined ? localRec.c8 : cloudRec.c8,
-                    c9: localRec.c9 !== undefined ? localRec.c9 : cloudRec.c9,
-                    c10: localRec.c10 !== undefined ? localRec.c10 : (cloudRec.c10 ?? cloudRec.final2),
-                    cSumPre: localRec.cSumPre !== undefined ? localRec.cSumPre : (cloudRec.cSumPre ?? cloudRec.formative1),
-                    cSumPost: localRec.cSumPost !== undefined ? localRec.cSumPost : (cloudRec.cSumPost ?? cloudRec.formative2),
-                    cSumFormative: localRec.cSumFormative !== undefined ? localRec.cSumFormative : cloudRec.cSumFormative,
-                    yearlyTotal: (cloudRec.yearlyTotal !== null && cloudRec.yearlyTotal !== undefined) ? cloudRec.yearlyTotal : localRec.yearlyTotal,
-                    grade: (cloudRec.grade && cloudRec.grade !== '-') ? cloudRec.grade : (localRec.grade || '-'),
-                    isPassed: cloudRec.isPassed ?? localRec.isPassed
-                  };
-                }
+                const resolvedC1 = pickScore(cloudRec.c1, localRec?.c1);
+                const resolvedC2 = pickScore(cloudRec.c2, localRec?.c2);
+                const resolvedC3 = pickScore(cloudRec.c3, localRec?.c3);
+                const resolvedC4 = pickScore(cloudRec.c4, localRec?.c4);
+                const resolvedC5 = pickScore(cloudRec.c5 ?? cloudRec.midterm1, localRec?.c5 ?? localRec?.midterm1);
+                const resolvedRetake = pickScore(cloudRec.cRetakeMidterm, localRec?.cRetakeMidterm);
+                const resolvedC6 = pickScore(cloudRec.c6, localRec?.c6);
+                const resolvedC7 = pickScore(cloudRec.c7, localRec?.c7);
+                const resolvedC8 = pickScore(cloudRec.c8, localRec?.c8);
+                const resolvedC9 = pickScore(cloudRec.c9, localRec?.c9);
+                const resolvedC10 = pickScore(cloudRec.c10 ?? cloudRec.final2, localRec?.c10 ?? localRec?.final2);
+
+                const hasPre = (resolvedC1 !== null) || (resolvedC2 !== null) || (resolvedC3 !== null) || (resolvedC4 !== null);
+                const sumPre = hasPre ? ((resolvedC1 ?? 0) + (resolvedC2 ?? 0) + (resolvedC3 ?? 0) + (resolvedC4 ?? 0)) : (cloudRec.formative1 ?? localRec?.formative1 ?? null);
+                const hasPost = (resolvedC6 !== null) || (resolvedC7 !== null) || (resolvedC8 !== null) || (resolvedC9 !== null);
+                const sumPost = hasPost ? ((resolvedC6 ?? 0) + (resolvedC7 ?? 0) + (resolvedC8 ?? 0) + (resolvedC9 ?? 0)) : (cloudRec.formative2 ?? localRec?.formative2 ?? null);
+
+                merged[cls][subId][stuId] = {
+                  ...cloudRec,
+                  c1: resolvedC1,
+                  c2: resolvedC2,
+                  c3: resolvedC3,
+                  c4: resolvedC4,
+                  c5: resolvedC5,
+                  cRetakeMidterm: resolvedRetake,
+                  c6: resolvedC6,
+                  c7: resolvedC7,
+                  c8: resolvedC8,
+                  c9: resolvedC9,
+                  c10: resolvedC10,
+                  cSumPre: sumPre,
+                  cSumPost: sumPost,
+                  cSumFormative: (sumPre !== null ? sumPre : 0) + (resolvedC5 ?? 0) + (sumPost !== null ? sumPost : 0),
+                  formative1: sumPre,
+                  midterm1: resolvedC5,
+                  total1: (sumPre !== null || resolvedC5 !== null) ? ((sumPre ?? 0) + (resolvedC5 ?? 0)) : null,
+                  formative2: sumPost,
+                  final2: resolvedC10,
+                  total2: (sumPost !== null || resolvedC10 !== null) ? ((sumPost ?? 0) + (resolvedC10 ?? 0)) : null,
+                  yearlyTotal: cloudRec.yearlyTotal ?? localRec?.yearlyTotal ?? null,
+                  grade: (cloudRec.grade && cloudRec.grade !== '-') ? cloudRec.grade : (localRec?.grade || '-'),
+                  isPassed: cloudRec.isPassed ?? localRec?.isPassed ?? false
+                };
               }
             }
           }
@@ -528,32 +555,32 @@ export const App: React.FC = () => {
         setClassSubjects(prev => {
           const merged: Record<string, SubjectConfig[]> = { ...prev };
           for (const [cls, cloudSubs] of Object.entries(cloudData.subjectsMap)) {
-            const existingList = merged[cls] || [];
-            const existingMap = new Map<string, SubjectConfig>();
-            existingList.forEach(s => {
-              if (s.id) existingMap.set(s.id, s);
-              if (s.code) existingMap.set(s.code.trim().toUpperCase(), s);
-            });
-
-            merged[cls] = (cloudSubs || []).map(cs => {
-              const normCode = (cs.code || '').trim().toUpperCase();
-              const existing = existingMap.get(cs.id) || existingMap.get(normCode);
+            const existingList = merged[cls] || CLASS_SUBJECTS_MAP[cls] || [];
+            merged[cls] = existingList.map(existing => {
+              const normCode = (existing.code || '').trim().toUpperCase();
+              const cloudSub = (cloudSubs || []).find(cs => (cs.code && cs.code.trim().toUpperCase() === normCode) || cs.id === existing.id);
               const weights =
-                existing?.assessmentWeights ||
-                findSavedAssessmentWeights(cls, cs.code, cs.id) ||
-                cs.assessmentWeights;
+                cloudSub?.assessmentWeights ||
+                findSavedAssessmentWeights(cls, existing.code, existing.id) ||
+                existing.assessmentWeights;
 
+              const targetId = cloudSub?.id || existing.id;
               if (weights) {
+                saveSubjectAssessmentWeights(cls, existing.code, weights);
                 const term1 = (weights.c1 + weights.c2 + weights.c3 + weights.c4) + weights.c5;
                 const term2 = (weights.c6 + weights.c7 + weights.c8 + weights.c9) + weights.c10;
                 return {
-                  ...cs,
+                  ...existing,
+                  id: targetId,
                   assessmentWeights: weights,
                   fullScoreTerm1: term1,
                   fullScoreTerm2: term2
                 };
               }
-              return cs;
+              return {
+                ...existing,
+                id: targetId
+              };
             });
           }
           localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(merged));
@@ -561,6 +588,10 @@ export const App: React.FC = () => {
           return merged;
         });
       }
+      isCloudHydratedRef.current = true;
+    }).catch(err => {
+      console.warn('fetchAllScoresFromCloud failed:', err);
+      isCloudHydratedRef.current = true;
     });
 
     // 3. ดึงข้อมูลประเมินพัฒนาการระดับปฐมวัย (อ.1 - อ.3) จาก Supabase Cloud
@@ -841,6 +872,60 @@ export const App: React.FC = () => {
     );
   };
 
+  const handlePullFromCloud = async () => {
+    const cloudData = await CloudSyncEngine.fetchAllScoresFromCloud(config.academicYear);
+    if (!cloudData) return;
+    if (cloudData.scores && Object.keys(cloudData.scores).length > 0) {
+      setScoresStore(prev => {
+        const merged = { ...prev };
+        for (const [cls, subMap] of Object.entries(cloudData.scores)) {
+          if (!merged[cls]) merged[cls] = {};
+          for (const [subId, stuMap] of Object.entries(subMap)) {
+            if (!merged[cls][subId]) merged[cls][subId] = {};
+            for (const [stuId, cloudRec] of Object.entries(stuMap)) {
+              merged[cls][subId][stuId] = cloudRec;
+            }
+          }
+        }
+        localStorage.setItem(`pp5_scores_${config.academicYear}`, JSON.stringify(merged));
+        localStorage.setItem('pp5_scores', JSON.stringify(merged));
+        return merged;
+      });
+    }
+    if (cloudData.subjectsMap && Object.keys(cloudData.subjectsMap).length > 0) {
+      setClassSubjects(prev => {
+        const merged: Record<string, SubjectConfig[]> = { ...prev };
+        for (const [cls, cloudSubs] of Object.entries(cloudData.subjectsMap)) {
+          const existingList = merged[cls] || CLASS_SUBJECTS_MAP[cls] || [];
+          merged[cls] = existingList.map(existing => {
+            const normC = (existing.code || '').replace(/\s+/g, '').toUpperCase();
+            const cloudSub = (cloudSubs || []).find(cs => (cs.code && (cs.code || '').replace(/\s+/g, '').toUpperCase() === normC) || cs.id === existing.id);
+            const weights = cloudSub?.assessmentWeights || findSavedAssessmentWeights(cls, existing.code, existing.id) || existing.assessmentWeights;
+            const targetId = cloudSub?.id || existing.id;
+            if (weights) {
+              saveSubjectAssessmentWeights(cls, existing.code, weights);
+              return {
+                ...existing,
+                id: targetId,
+                assessmentWeights: weights,
+                fullScoreTerm1: (weights.c1 + weights.c2 + weights.c3 + weights.c4) + weights.c5,
+                fullScoreTerm2: (weights.c6 + weights.c7 + weights.c8 + weights.c9) + weights.c10
+              };
+            }
+            return {
+              ...existing,
+              id: targetId
+            };
+          });
+        }
+        localStorage.setItem(`pp5_class_subjects_${config.academicYear}`, JSON.stringify(merged));
+        localStorage.setItem('pp5_class_subjects', JSON.stringify(merged));
+        return merged;
+      });
+    }
+    isCloudHydratedRef.current = true;
+  };
+
   const handleDeleteSubject = async (id: string) => {
     const list = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
     const subjectToDelete = list.find(s => s.id === id);
@@ -896,16 +981,40 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateScore = (subjectId: string, studentId: string, updatedRecord: StudentScoreRecord) => {
+    isCloudHydratedRef.current = true;
     setScoresStore(prev => {
       const clsScores = prev[config.classLevel] || {};
-      const subScores = clsScores[subjectId] || {};
-      const newCls = {
-        ...clsScores,
-        [subjectId]: {
-          ...subScores,
-          [studentId]: updatedRecord
+      const newCls = { ...clsScores };
+
+      // Identify subject to alias across UUID, mock ID, raw code, and normalized code
+      const currentSubs = classSubjects[config.classLevel] || CLASS_SUBJECTS_MAP[config.classLevel] || [];
+      const normC = (c?: string) => (c || '').replace(/\s+/g, '').toUpperCase();
+      const matchedSub = currentSubs.find(s => s.id === subjectId || s.code === subjectId || normC(s.code) === normC(subjectId));
+
+      const targetKeys = new Set<string>();
+      targetKeys.add(subjectId);
+      if (matchedSub?.id) targetKeys.add(matchedSub.id);
+      if (matchedSub?.code) {
+        targetKeys.add(matchedSub.code.trim());
+        targetKeys.add(normC(matchedSub.code));
+      }
+      // Also match CLASS_SUBJECTS_MAP mock ID
+      const defaultSubs = CLASS_SUBJECTS_MAP[config.classLevel] || [];
+      const matchedDefault = defaultSubs.find(ds => normC(ds.code) === normC(matchedSub?.code || subjectId));
+      if (matchedDefault?.id) {
+        targetKeys.add(matchedDefault.id);
+        if (matchedDefault.id.startsWith('sub_p')) {
+          targetKeys.add(matchedDefault.id.replace(/sub_p\d+_/, 'sub_'));
         }
-      };
+      }
+
+      targetKeys.forEach(k => {
+        newCls[k] = {
+          ...(newCls[k] || {}),
+          [studentId]: updatedRecord
+        };
+      });
+
       const updated = {
         ...prev,
         [config.classLevel]: newCls
@@ -918,6 +1027,7 @@ export const App: React.FC = () => {
 
   // Debounced Auto-Sync เมื่อครูกรอกหรือแก้ไขคะแนน (หน่วง 2 วินาทีหลังจากพิมพ์เสร็จ)
   useEffect(() => {
+    if (!isCloudHydratedRef.current) return;
     const currentClassScores = scoresStore[config.classLevel];
     if (!currentClassScores || Object.keys(currentClassScores).length === 0) return;
 
@@ -941,6 +1051,7 @@ export const App: React.FC = () => {
 
   // Debounced Auto-Sync เมื่อครูลงเวลาเรียน (หน่วง 2 วินาทีหลังจากติ๊กหรือบันทึกเวลาเรียน)
   useEffect(() => {
+    if (!isCloudHydratedRef.current) return;
     if (config.classLevel.startsWith('อ.')) return;
     const currentAttendance = attendanceStore[config.classLevel];
     if (!currentAttendance || Object.keys(currentAttendance).length === 0) return;
@@ -965,6 +1076,7 @@ export const App: React.FC = () => {
 
   // Debounced Auto-Sync เมื่อครูปฐมวัยประเมินพัฒนาการ ๑๒ มาตรฐาน (หน่วง 2 วินาทีหลังจากบันทึก)
   useEffect(() => {
+    if (!isCloudHydratedRef.current) return;
     if (!config.classLevel.startsWith('อ.')) return;
     const currentKAssessments = kindergartenAssessments[config.classLevel];
     if (!currentKAssessments || Object.keys(currentKAssessments).length === 0) return;
@@ -1339,6 +1451,7 @@ export const App: React.FC = () => {
               authUser?.role === 'admin'
             }
             onForceSync={handleForceSyncScores}
+            onPullCloud={handlePullFromCloud}
           />
         )}
 

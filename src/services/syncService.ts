@@ -4,6 +4,8 @@ import { localDb } from '../db/localDb';
 import { StudentProfile, SubjectConfig, StudentScoreRecord, AcademicConfig, AttendanceDetail } from '../types/pp5Types';
 import { GrowthEngine } from '../engines/growthEngine';
 import { KINDERGARTEN_STANDARDS, KindergartenStudentAssessment, QualityLevel } from '../types/kindergartenTypes';
+import { CLASS_SUBJECTS_MAP } from '../data/classSubjectsData';
+import { saveSubjectAssessmentWeights } from '../utils/weightStorage';
 
 export interface SyncResult {
   success: boolean;
@@ -190,30 +192,53 @@ export class CloudSyncEngine {
         const subDbId = subjectIdMap.get(normCode(sub.code)) || subjectIdMap.get(sub.id) || sub.id;
         if (!subDbId) continue;
 
-        const subScores =
-          scores[sub.id] ||
-          scores[subDbId] ||
-          (oldIdMap.get(sub.id) ? scores[oldIdMap.get(sub.id)!] : undefined) ||
-          (oldIdMap.get(subDbId) ? scores[oldIdMap.get(subDbId)!] : undefined) ||
-          {};
+        const nCode = normCode(sub.code);
+        // Universal lookup across all possible key aliases (UUID, mock ID, raw code, normalized code)
+        const candidateScoresMaps = [
+          scores[sub.id],
+          scores[subDbId],
+          oldIdMap.get(sub.id) ? scores[oldIdMap.get(sub.id)!] : undefined,
+          oldIdMap.get(subDbId) ? scores[oldIdMap.get(subDbId)!] : undefined,
+          sub.code ? scores[sub.code.trim()] : undefined,
+          nCode ? scores[nCode] : undefined
+        ].filter(Boolean) as Record<string, StudentScoreRecord>[];
+
         for (const s of students) {
-          const rec = subScores[s.studentId];
+          let rec: StudentScoreRecord | undefined = undefined;
+          for (const m of candidateScoresMaps) {
+            const cand = m[s.studentId];
+            if (cand) {
+              if (!rec || (cand.c1 !== null && cand.c1 !== undefined) || (cand.formative1 !== null && cand.formative1 !== undefined && rec.formative1 === null)) {
+                rec = cand;
+              }
+            }
+          }
           if (!rec) continue;
 
           // Encode 10-score records and custom weights into updated_by (Carrier Pattern)
           const baseTeacher = config.homeroomTeacher || 'ครูประจำชั้น';
+          const c1Val = rec.c1 !== null && rec.c1 !== undefined
+            ? rec.c1
+            : (rec.formative1 !== null && rec.formative1 !== undefined && rec.c2 === null && rec.c3 === null && rec.c4 === null ? rec.formative1 : '');
+          const c5Val = rec.c5 !== null && rec.c5 !== undefined
+            ? rec.c5
+            : (rec.midterm1 !== null && rec.midterm1 !== undefined ? rec.midterm1 : '');
+          const c10Val = rec.c10 !== null && rec.c10 !== undefined
+            ? rec.c10
+            : (rec.final2 !== null && rec.final2 !== undefined ? rec.final2 : '');
+
           const subScoresTag = [
-            rec.c1 !== null && rec.c1 !== undefined ? rec.c1 : '',
+            c1Val,
             rec.c2 !== null && rec.c2 !== undefined ? rec.c2 : '',
             rec.c3 !== null && rec.c3 !== undefined ? rec.c3 : '',
             rec.c4 !== null && rec.c4 !== undefined ? rec.c4 : '',
-            rec.c5 !== null && rec.c5 !== undefined ? rec.c5 : '',
+            c5Val,
             rec.cRetakeMidterm !== null && rec.cRetakeMidterm !== undefined ? rec.cRetakeMidterm : '',
             rec.c6 !== null && rec.c6 !== undefined ? rec.c6 : '',
             rec.c7 !== null && rec.c7 !== undefined ? rec.c7 : '',
             rec.c8 !== null && rec.c8 !== undefined ? rec.c8 : '',
             rec.c9 !== null && rec.c9 !== undefined ? rec.c9 : '',
-            rec.c10 !== null && rec.c10 !== undefined ? rec.c10 : ''
+            c10Val
           ].join(',');
 
           let carrier = `${baseTeacher}#MIS:${subScoresTag}`;
@@ -819,51 +844,84 @@ export class CloudSyncEngine {
                 c6: wVals[5], c7: wVals[6], c8: wVals[7], c9: wVals[8], c10: wVals[9]
               };
               if (subjectsMap[classLevel]) {
-                const subObj = subjectsMap[classLevel].find(s => s.id === subjectId);
-                if (subObj && !subObj.assessmentWeights) {
+                const subObj = subjectsMap[classLevel].find(s => s.id === subjectId || normCode(s.code) === normCode(lookup.subjectId));
+                if (subObj) {
                   subObj.assessmentWeights = parsedWeights;
                   subObj.fullScoreTerm1 = (parsedWeights.c1 + parsedWeights.c2 + parsedWeights.c3 + parsedWeights.c4) + parsedWeights.c5;
                   subObj.fullScoreTerm2 = (parsedWeights.c6 + parsedWeights.c7 + parsedWeights.c8 + parsedWeights.c9) + parsedWeights.c10;
+                  saveSubjectAssessmentWeights(classLevel, subObj.code, parsedWeights);
                 }
               }
             }
           }
         }
 
+        // Smart fallback for c1, c5, c10 from legacy summary columns if #MIS: was empty
+        const effectiveC1 = c1 !== null ? c1 : (g.formative1 !== null && g.formative1 !== undefined && c2 === null && c3 === null && c4 === null ? Number(g.formative1) : null);
+        const effectiveC5 = c5 !== null ? c5 : (g.midterm1 !== null && g.midterm1 !== undefined ? Number(g.midterm1) : null);
+        const effectiveC10 = c10 !== null ? c10 : (g.final2 !== null && g.final2 !== undefined ? Number(g.final2) : null);
+
         // Calculated sum helpers
-        const hasPre = (c1 !== null) || (c2 !== null) || (c3 !== null) || (c4 !== null);
-        const sumPre = hasPre ? ((c1 ?? 0) + (c2 ?? 0) + (c3 ?? 0) + (c4 ?? 0)) : g.formative1;
+        const hasPre = (effectiveC1 !== null) || (c2 !== null) || (c3 !== null) || (c4 !== null);
+        const sumPre = hasPre ? ((effectiveC1 ?? 0) + (c2 ?? 0) + (c3 ?? 0) + (c4 ?? 0)) : g.formative1;
         const hasPost = (c6 !== null) || (c7 !== null) || (c8 !== null) || (c9 !== null);
         const sumPost = hasPost ? ((c6 ?? 0) + (c7 ?? 0) + (c8 ?? 0) + (c9 ?? 0)) : g.formative2;
 
-        scores[classLevel][subjectId][g.student_id] = {
+        const scoreRecord: StudentScoreRecord = {
           studentId: g.student_id,
-          formative1: g.formative1,
-          midterm1: g.midterm1,
+          formative1: sumPre,
+          midterm1: effectiveC5,
           final1: g.final1,
-          total1: g.total1,
-          formative2: g.formative2,
+          total1: (sumPre !== null || effectiveC5 !== null) ? ((sumPre ?? 0) + (effectiveC5 ?? 0)) : g.total1,
+          formative2: sumPost,
           midterm2: g.midterm2,
-          final2: g.final2,
-          total2: g.total2,
+          final2: effectiveC10,
+          total2: (sumPost !== null || effectiveC10 !== null) ? ((sumPost ?? 0) + (effectiveC10 ?? 0)) : g.total2,
           yearlyTotal: g.yearly_total,
           grade: g.grade || '-',
           isPassed: g.is_passed ?? true,
-          c1: c1,
+          c1: effectiveC1,
           c2: c2,
           c3: c3,
           c4: c4,
-          c5: c5 !== null ? c5 : g.midterm1,
+          c5: effectiveC5,
           cRetakeMidterm: cRetakeMidterm,
           c6: c6,
           c7: c7,
           c8: c8,
           c9: c9,
-          c10: c10 !== null ? c10 : g.final2,
+          c10: effectiveC10,
           cSumPre: sumPre,
           cSumPost: sumPost,
-          cSumFormative: (sumPre !== null && sumPre !== undefined ? sumPre : 0) + (c5 ?? g.midterm1 ?? 0) + (sumPost !== null && sumPost !== undefined ? sumPost : 0)
+          cSumFormative: (sumPre !== null && sumPre !== undefined ? sumPre : 0) + (effectiveC5 ?? 0) + (sumPost !== null && sumPost !== undefined ? sumPost : 0)
         };
+
+        // Populate to ALL alias keys for this subject (UUID, code, normCode, mock IDs)
+        const targetKeys = new Set<string>();
+        targetKeys.add(subjectId);
+        const dbSub = dbSubjects.find(s => s.id === g.subject_id);
+        const subCode = dbSub?.code?.trim();
+        if (subCode) {
+          targetKeys.add(subCode);
+          targetKeys.add(normCode(subCode));
+        }
+
+        // Match with default mock IDs in CLASS_SUBJECTS_MAP
+        const defaultList = CLASS_SUBJECTS_MAP[classLevel] || [];
+        const nCode = normCode(subCode || '');
+        const matchedDefault = defaultList.find(item => normCode(item.code) === nCode);
+        if (matchedDefault?.id) {
+          targetKeys.add(matchedDefault.id);
+          if (matchedDefault.id.startsWith('sub_p')) {
+            const shortMockId = matchedDefault.id.replace(/sub_p\d+_/, 'sub_');
+            targetKeys.add(shortMockId);
+          }
+        }
+
+        targetKeys.forEach(k => {
+          if (!scores[classLevel][k]) scores[classLevel][k] = {};
+          scores[classLevel][k][g.student_id] = scoreRecord;
+        });
       });
 
       return { scores, subjectsMap };

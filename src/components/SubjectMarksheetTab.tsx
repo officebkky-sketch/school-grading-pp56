@@ -56,6 +56,7 @@ interface Props {
   onToggleTerm1Lock?: () => void;
   canToggleLock?: boolean;
   onForceSync?: () => Promise<void> | void;
+  onPullCloud?: () => Promise<void> | void;
 }
 
 export const SubjectMarksheetTab: React.FC<Props> = ({
@@ -73,7 +74,8 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   isTerm1Locked = false,
   onToggleTerm1Lock,
   canToggleLock = false,
-  onForceSync
+  onForceSync,
+  onPullCloud
 }) => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   
@@ -86,7 +88,14 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
 
   const selectedSubject = subjects.find(s => s.id === selectedSubjectId) || subjects[0];
 
-  const currentSubjectScores = scores[selectedSubjectId] || {};
+  const normSubCode = (c?: string) => (c || '').replace(/\s+/g, '').toUpperCase();
+  const nCode = normSubCode(selectedSubject?.code);
+  const currentSubjectScores =
+    scores[selectedSubjectId] ||
+    (selectedSubject?.id ? scores[selectedSubject.id] : undefined) ||
+    (selectedSubject?.code ? scores[selectedSubject.code.trim()] : undefined) ||
+    (nCode ? scores[nCode] : undefined) ||
+    {};
 
   // Compute stats based on yearlyTotal or term total
   const scoreList = students.map(s => {
@@ -248,6 +257,8 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
   const [isScoreConfigModalOpen, setIsScoreConfigModalOpen] = useState(false);
   const [isSavingScores, setIsSavingScores] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [isPullingCloud, setIsPullingCloud] = useState(false);
+  const [pullSuccessMsg, setPullSuccessMsg] = useState<string | null>(null);
 
   const handleSaveWeights = (newWeights: SubjectAssessmentWeights) => {
     if (!selectedSubject || !onUpdateSubject) return;
@@ -277,6 +288,22 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
       alert(`⚠️ เกิดข้อผิดพลาดในการบันทึก: ${err?.message || 'โปรดลองใหม่อีกครั้ง'}`);
     } finally {
       setIsSavingScores(false);
+    }
+  };
+
+  const handleManualPullCloud = async () => {
+    setIsPullingCloud(true);
+    setPullSuccessMsg(null);
+    try {
+      if (onPullCloud) {
+        await onPullCloud();
+        setPullSuccessMsg('ดึงข้อมูลล่าสุดจากคลาวด์สำเร็จแล้ว');
+        setTimeout(() => setPullSuccessMsg(null), 3500);
+      }
+    } catch (err: any) {
+      alert(`⚠️ เกิดข้อผิดพลาดในการดึงข้อมูล: ${err?.message || 'โปรดลองใหม่อีกครั้ง'}`);
+    } finally {
+      setIsPullingCloud(false);
     }
   };
 
@@ -596,6 +623,12 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                 <span>{saveSuccessMsg}</span>
               </span>
             )}
+            {pullSuccessMsg && (
+              <span className="text-indigo-800 bg-indigo-100 border border-indigo-400 px-3 py-0.5 rounded-full font-bold shadow-xs animate-in fade-in flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{pullSuccessMsg}</span>
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -686,6 +719,20 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                 </>
               )}
             </button>
+
+            {/* ปุ่มดึงข้อมูลล่าสุดจากคลาวด์ (Pull From Cloud) */}
+            {onPullCloud && (
+              <button
+                type="button"
+                disabled={isPullingCloud}
+                onClick={handleManualPullCloud}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition shadow-xs cursor-pointer active:scale-95"
+                title="ดึงคะแนนและสัดส่วนคะแนนเต็มล่าสุดจากเซิร์ฟเวอร์คลาวด์"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${isPullingCloud ? 'animate-spin' : ''}`} />
+                <span>{isPullingCloud ? 'กำลังดึงข้อมูล...' : 'ดึงจากคลาวด์'}</span>
+              </button>
+            )}
 
             {/* ปุ่มล็อค / ปปลดล็อคคะแนนภาคเรียนที่ 1 */}
             {canToggleLock ? (
