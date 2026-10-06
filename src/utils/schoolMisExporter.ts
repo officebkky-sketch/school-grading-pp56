@@ -106,19 +106,21 @@ export function exportSchoolMIS_SingleSubjectCSV(
       ? rec.c5 
       : (midterm !== null && midterm !== undefined ? midterm : '');
     const cRetakeMidterm = rec?.cRetakeMidterm !== null && rec?.cRetakeMidterm !== undefined ? rec.cRetakeMidterm : '';
-    const c6 = rec?.c6 !== null && rec?.c6 !== undefined ? rec.c6 : '';
-    const c7 = rec?.c7 !== null && rec?.c7 !== undefined ? rec.c7 : '';
-    const c8 = rec?.c8 !== null && rec?.c8 !== undefined ? rec.c8 : '';
-    const c9 = rec?.c9 !== null && rec?.c9 !== undefined ? rec.c9 : '';
-    const cSum2 = rec?.cSumPost !== null && rec?.cSumPost !== undefined ? rec.cSumPost : '';
-    const cSumFormative = rec?.cSumFormative !== null && rec?.cSumFormative !== undefined 
-      ? rec.cSumFormative 
-      : ((rec?.cSumPre ?? (typeof formative === 'number' ? formative : 0)) + (rec?.c5 ?? (typeof midterm === 'number' ? midterm : 0)) + (rec?.cSumPost ?? 0));
-    const c10_final = rec?.c10 !== null && rec?.c10 !== undefined 
+    const c6 = config.semester === 1 ? '' : (rec?.c6 !== null && rec?.c6 !== undefined ? rec.c6 : '');
+    const c7 = config.semester === 1 ? '' : (rec?.c7 !== null && rec?.c7 !== undefined ? rec.c7 : '');
+    const c8 = config.semester === 1 ? '' : (rec?.c8 !== null && rec?.c8 !== undefined ? rec.c8 : '');
+    const c9 = config.semester === 1 ? '' : (rec?.c9 !== null && rec?.c9 !== undefined ? rec.c9 : '');
+    const cSum2 = config.semester === 1 ? '' : (rec?.cSumPost !== null && rec?.cSumPost !== undefined ? rec.cSumPost : '');
+    const cSumFormative = config.semester === 1 
+      ? (rec?.cSumPre ?? (typeof formative === 'number' ? formative : ''))
+      : (rec?.cSumFormative !== null && rec?.cSumFormative !== undefined 
+          ? rec.cSumFormative 
+          : ((rec?.cSumPre ?? (typeof formative === 'number' ? formative : 0)) + (rec?.c5 ?? (typeof midterm === 'number' ? midterm : 0)) + (rec?.cSumPost ?? 0)));
+    const c10_final = config.semester === 1 ? '' : (rec?.c10 !== null && rec?.c10 !== undefined 
       ? rec.c10 
-      : (finalScore !== null && finalScore !== undefined ? finalScore : '');
-    const cTotal = rec?.yearlyTotal ?? total ?? '';
-    const cGrade = rec?.grade && rec.grade !== '-' ? rec.grade : grade;
+      : (finalScore !== null && finalScore !== undefined ? finalScore : ''));
+    const cTotal = config.semester === 1 ? '' : (rec?.yearlyTotal ?? total ?? '');
+    const cGrade = config.semester === 1 ? '' : (rec?.grade && rec.grade !== '-' ? rec.grade : grade);
 
     const line = [
       colSeq,

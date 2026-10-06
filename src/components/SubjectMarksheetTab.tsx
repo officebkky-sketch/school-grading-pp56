@@ -967,22 +967,25 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                   const c5 = rec.c5 ?? rec.midterm1 ?? 0;
 
                   // Smart effective c6 with fallback to formative2 if c6..c9 are empty
-                  const effectiveC6 = rec.c6 !== null && rec.c6 !== undefined
-                    ? rec.c6
-                    : (rec.formative2 !== null && rec.formative2 !== undefined && (rec.c7 === null || rec.c7 === undefined) && (rec.c8 === null || rec.c8 === undefined) && (rec.c9 === null || rec.c9 === undefined)
-                        ? rec.formative2
-                        : null);
+                  // ในภาคเรียนที่ 1 (semester === 1) ยังไม่มีการประเมินหลังกลางภาค ให้ effectiveC6 เป็น null
+                  const effectiveC6 = semester === 1
+                    ? (rec.c6 !== null && rec.c6 !== undefined ? rec.c6 : null)
+                    : (rec.c6 !== null && rec.c6 !== undefined
+                        ? rec.c6
+                        : (rec.formative2 !== null && rec.formative2 !== undefined && (rec.c7 === null || rec.c7 === undefined) && (rec.c8 === null || rec.c8 === undefined) && (rec.c9 === null || rec.c9 === undefined)
+                            ? rec.formative2
+                            : null));
 
                   // Sum post (c6..c9)
                   const hasExplicitPost = (effectiveC6 !== null) ||
                                           (rec.c7 !== null && rec.c7 !== undefined) ||
                                           (rec.c8 !== null && rec.c8 !== undefined) ||
                                           (rec.c9 !== null && rec.c9 !== undefined);
-                  const sumPost = rec.cSumPost !== undefined && rec.cSumPost !== null
+                  const sumPost = semester === 1 ? 0 : (rec.cSumPost !== undefined && rec.cSumPost !== null
                     ? rec.cSumPost
                     : (hasExplicitPost
                         ? ((effectiveC6 ?? 0) + (rec.c7 ?? 0) + (rec.c8 ?? 0) + (rec.c9 ?? 0))
-                        : (rec.formative2 ?? 0));
+                        : (rec.formative2 ?? 0)));
 
                   // Sum formative (pre + c5 + post)
                   const sumFormative = rec.cSumFormative !== undefined && rec.cSumFormative !== null
@@ -990,15 +993,21 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                     : (sumPre + c5 + sumPost);
 
                   // Final c10
-                  const c10 = rec.c10 ?? rec.final2 ?? 0;
+                  const c10 = semester === 1 ? 0 : (rec.c10 ?? rec.final2 ?? 0);
+                  const hasFinal = semester === 2 && ((rec.c10 !== null && rec.c10 !== undefined) || (rec.final2 !== null && rec.final2 !== undefined));
 
-                  // Total All
-                  const totalAll = rec.yearlyTotal !== null && rec.yearlyTotal !== undefined
-                    ? rec.yearlyTotal
-                    : (sumFormative + c10);
+                  // Total All & GPA (คำนวณตลอดปีและเกรดเฉพาะเมื่ออยู่ในภาคเรียนที่ 2 และมีการสอบปลายภาคแล้วตามระเบียบ สพฐ.)
+                  const totalAll = semester === 1
+                    ? null
+                    : (rec.yearlyTotal !== null && rec.yearlyTotal !== undefined
+                        ? rec.yearlyTotal
+                        : (hasFinal ? (sumFormative + c10) : null));
 
-                  // GPA
-                  const gpa = rec.grade && rec.grade !== '-' ? rec.grade : (totalAll > 0 ? GradingEngine.calculateGrade(totalAll) : '');
+                  const gpa = semester === 1
+                    ? '-'
+                    : (rec.grade && rec.grade !== '-'
+                        ? rec.grade
+                        : (hasFinal && totalAll !== null && totalAll > 0 ? GradingEngine.calculateGrade(totalAll) : '-'));
 
                   return (
                     <tr key={s.id} className="hover:bg-slate-50 transition border-b border-slate-200">
@@ -1237,14 +1246,14 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                       {/* รวมคะแนนทั้งหมด */}
                       <td className="p-1 border border-slate-300 text-center">
                         <div className={`py-1 px-1 rounded border border-slate-300 bg-white font-mono ${totalAll === 0 ? 'text-red-600' : 'text-slate-800 font-bold'}`}>
-                          {totalAll}
+                          {totalAll !== null ? totalAll : '-'}
                         </div>
                       </td>
 
                       {/* GPA */}
                       <td className="p-1 border border-slate-300 text-center">
                         <div className="w-full py-1 bg-white border border-slate-300 rounded text-center text-slate-800 font-mono font-bold">
-                          {gpa || ''}
+                          {gpa && gpa !== '-' ? gpa : '-'}
                         </div>
                       </td>
                     </tr>
@@ -1435,15 +1444,17 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
 
                       {/* Yearly Total & Grade */}
                       <td className="px-2 py-2 text-center font-bold bg-amber-50/30 text-amber-900 border-r border-slate-200">
-                        {rec.yearlyTotal ?? '-'}
+                        {semester === 1 ? '-' : (rec.yearlyTotal ?? '-')}
                       </td>
                       <td className="px-2 py-2 text-center border-r border-slate-200">
-                        <span className={`inline-block w-8 py-0.5 rounded text-center text-xs border ${getGradeBadgeColor(rec.grade)}`}>
-                          {rec.grade}
+                        <span className={`inline-block w-8 py-0.5 rounded text-center text-xs border ${getGradeBadgeColor(semester === 1 ? '-' : rec.grade)}`}>
+                          {semester === 1 ? '-' : rec.grade}
                         </span>
                       </td>
                       <td className="px-2 py-2 text-center font-sans text-xs">
-                        {rec.grade !== '-' ? (
+                        {semester === 1 ? (
+                          <span className="text-slate-400">อยู่ระหว่างเรียน</span>
+                        ) : rec.grade !== '-' ? (
                           rec.isPassed ? (
                             <span className="text-emerald-600 font-semibold">ผ่าน</span>
                           ) : (
