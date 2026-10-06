@@ -489,9 +489,12 @@ export const App: React.FC = () => {
       return null;
     };
 
-    CloudSyncEngine.fetchAllScoresFromCloud(config.academicYear).then((cloudData) => {
-      if (!isSubscribed || !cloudData) return;
-      if (cloudData.scores && Object.keys(cloudData.scores).length > 0) {
+    // 2. ระบายคิว Outbox ที่อาจค้างอยู่จากการทำงานออฟไลน์ขึ้น Cloud ก่อน แล้วจึงดึงข้อมูลล่าสุด
+    CloudSyncEngine.processPendingOutbox().finally(() => {
+      if (!isSubscribed) return;
+      CloudSyncEngine.fetchAllScoresFromCloud(config.academicYear).then((cloudData) => {
+        if (!isSubscribed || !cloudData) return;
+        if (cloudData.scores && Object.keys(cloudData.scores).length > 0) {
         setScoresStore(prev => {
           const merged = { ...prev };
           for (const [cls, subMap] of Object.entries(cloudData.scores)) {
@@ -592,6 +595,7 @@ export const App: React.FC = () => {
     }).catch(err => {
       console.warn('fetchAllScoresFromCloud failed:', err);
       isCloudHydratedRef.current = true;
+    });
     });
 
     // 3. ดึงข้อมูลประเมินพัฒนาการระดับปฐมวัย (อ.1 - อ.3) จาก Supabase Cloud

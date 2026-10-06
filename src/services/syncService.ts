@@ -1131,12 +1131,61 @@ export class CloudSyncEngine {
     config: AcademicConfig
   ): Promise<void> {
     try {
+      const normCode = (c: string) => (c || '').replace(/\s+/g, '').toUpperCase();
       const gradesPayload: any[] = [];
+
       for (const sub of subjects) {
-        const subScores = scores[sub.id] || {};
+        const nCode = normCode(sub.code);
+        const candidateScoresMaps = [
+          scores[sub.id],
+          sub.code ? scores[sub.code.trim()] : undefined,
+          nCode ? scores[nCode] : undefined
+        ].filter(Boolean) as Record<string, StudentScoreRecord>[];
+
         for (const s of students) {
-          const rec = subScores[s.studentId];
+          let rec: StudentScoreRecord | undefined = undefined;
+          for (const m of candidateScoresMaps) {
+            const cand = m[s.studentId];
+            if (cand) {
+              if (!rec || (cand.c1 !== null && cand.c1 !== undefined) || (cand.formative1 !== null && cand.formative1 !== undefined && rec.formative1 === null)) {
+                rec = cand;
+              }
+            }
+          }
           if (!rec) continue;
+
+          // Encode 10-score records and custom weights into updated_by (Carrier Pattern)
+          const baseTeacher = config.homeroomTeacher || 'ครูประจำชั้น';
+          const c1Val = rec.c1 !== null && rec.c1 !== undefined
+            ? rec.c1
+            : (rec.formative1 !== null && rec.formative1 !== undefined && rec.c2 === null && rec.c3 === null && rec.c4 === null ? rec.formative1 : '');
+          const c5Val = rec.c5 !== null && rec.c5 !== undefined
+            ? rec.c5
+            : (rec.midterm1 !== null && rec.midterm1 !== undefined ? rec.midterm1 : '');
+          const c10Val = rec.c10 !== null && rec.c10 !== undefined
+            ? rec.c10
+            : (rec.final2 !== null && rec.final2 !== undefined ? rec.final2 : '');
+
+          const subScoresTag = [
+            c1Val,
+            rec.c2 !== null && rec.c2 !== undefined ? rec.c2 : '',
+            rec.c3 !== null && rec.c3 !== undefined ? rec.c3 : '',
+            rec.c4 !== null && rec.c4 !== undefined ? rec.c4 : '',
+            c5Val,
+            rec.cRetakeMidterm !== null && rec.cRetakeMidterm !== undefined ? rec.cRetakeMidterm : '',
+            rec.c6 !== null && rec.c6 !== undefined ? rec.c6 : '',
+            rec.c7 !== null && rec.c7 !== undefined ? rec.c7 : '',
+            rec.c8 !== null && rec.c8 !== undefined ? rec.c8 : '',
+            rec.c9 !== null && rec.c9 !== undefined ? rec.c9 : '',
+            c10Val
+          ].join(',');
+
+          let carrier = `${baseTeacher}#MIS:${subScoresTag}`;
+          if (sub.assessmentWeights) {
+            const w = sub.assessmentWeights;
+            carrier += `#W:${w.c1},${w.c2},${w.c3},${w.c4},${w.c5},${w.c6},${w.c7},${w.c8},${w.c9},${w.c10}`;
+          }
+
           gradesPayload.push({
             student_id: s.studentId,
             subject_id: sub.id,
@@ -1153,7 +1202,7 @@ export class CloudSyncEngine {
             yearly_total: rec.yearlyTotal,
             grade: rec.grade || '-',
             is_passed: rec.isPassed ?? true,
-            updated_by: config.homeroomTeacher || 'ครูประจำชั้น',
+            updated_by: carrier,
             updated_at: new Date().toISOString()
           });
         }
