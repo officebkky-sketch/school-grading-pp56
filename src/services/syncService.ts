@@ -200,6 +200,28 @@ export class CloudSyncEngine {
           const rec = subScores[s.studentId];
           if (!rec) continue;
 
+          // Encode 10-score records and custom weights into updated_by (Carrier Pattern)
+          const baseTeacher = config.homeroomTeacher || 'ครูประจำชั้น';
+          const subScoresTag = [
+            rec.c1 !== null && rec.c1 !== undefined ? rec.c1 : '',
+            rec.c2 !== null && rec.c2 !== undefined ? rec.c2 : '',
+            rec.c3 !== null && rec.c3 !== undefined ? rec.c3 : '',
+            rec.c4 !== null && rec.c4 !== undefined ? rec.c4 : '',
+            rec.c5 !== null && rec.c5 !== undefined ? rec.c5 : '',
+            rec.cRetakeMidterm !== null && rec.cRetakeMidterm !== undefined ? rec.cRetakeMidterm : '',
+            rec.c6 !== null && rec.c6 !== undefined ? rec.c6 : '',
+            rec.c7 !== null && rec.c7 !== undefined ? rec.c7 : '',
+            rec.c8 !== null && rec.c8 !== undefined ? rec.c8 : '',
+            rec.c9 !== null && rec.c9 !== undefined ? rec.c9 : '',
+            rec.c10 !== null && rec.c10 !== undefined ? rec.c10 : ''
+          ].join(',');
+
+          let carrier = `${baseTeacher}#MIS:${subScoresTag}`;
+          if (sub.assessmentWeights) {
+            const w = sub.assessmentWeights;
+            carrier += `#W:${w.c1},${w.c2},${w.c3},${w.c4},${w.c5},${w.c6},${w.c7},${w.c8},${w.c9},${w.c10}`;
+          }
+
           gradesPayload.push({
             student_id: s.studentId,
             subject_id: subDbId,
@@ -216,7 +238,7 @@ export class CloudSyncEngine {
             yearly_total: rec.yearlyTotal,
             grade: rec.grade || '-',
             is_passed: rec.isPassed ?? true,
-            updated_by: config.homeroomTeacher || 'ครูประจำชั้น',
+            updated_by: carrier,
             updated_at: new Date().toISOString()
           });
         }
@@ -753,6 +775,67 @@ export class CloudSyncEngine {
         if (!scores[classLevel]) scores[classLevel] = {};
         if (!scores[classLevel][subjectId]) scores[classLevel][subjectId] = {};
 
+        // Parse carrier from g.updated_by
+        let c1: number | null = null;
+        let c2: number | null = null;
+        let c3: number | null = null;
+        let c4: number | null = null;
+        let c5: number | null = null;
+        let cRetakeMidterm: number | null = null;
+        let c6: number | null = null;
+        let c7: number | null = null;
+        let c8: number | null = null;
+        let c9: number | null = null;
+        let c10: number | null = null;
+
+        const rawUpdatedBy: string = g.updated_by || '';
+        if (rawUpdatedBy.includes('#MIS:')) {
+          const misPart = rawUpdatedBy.split('#MIS:')[1]?.split('#')[0];
+          if (misPart) {
+            const parts = misPart.split(',');
+            const parseVal = (v?: string) => (v === undefined || v === '' || isNaN(Number(v))) ? null : Number(v);
+            c1 = parseVal(parts[0]);
+            c2 = parseVal(parts[1]);
+            c3 = parseVal(parts[2]);
+            c4 = parseVal(parts[3]);
+            c5 = parseVal(parts[4]);
+            cRetakeMidterm = parseVal(parts[5]);
+            c6 = parseVal(parts[6]);
+            c7 = parseVal(parts[7]);
+            c8 = parseVal(parts[8]);
+            c9 = parseVal(parts[9]);
+            c10 = parseVal(parts[10]);
+          }
+        }
+
+        // Parse custom weights for the subject from g.updated_by (if present)
+        if (rawUpdatedBy.includes('#W:')) {
+          const wPart = rawUpdatedBy.split('#W:')[1]?.split('#')[0];
+          if (wPart) {
+            const wVals = wPart.split(',').map(Number);
+            if (wVals.length === 10 && !wVals.some(isNaN)) {
+              const parsedWeights = {
+                c1: wVals[0], c2: wVals[1], c3: wVals[2], c4: wVals[3], c5: wVals[4],
+                c6: wVals[5], c7: wVals[6], c8: wVals[7], c9: wVals[8], c10: wVals[9]
+              };
+              if (subjectsMap[classLevel]) {
+                const subObj = subjectsMap[classLevel].find(s => s.id === subjectId);
+                if (subObj && !subObj.assessmentWeights) {
+                  subObj.assessmentWeights = parsedWeights;
+                  subObj.fullScoreTerm1 = (parsedWeights.c1 + parsedWeights.c2 + parsedWeights.c3 + parsedWeights.c4) + parsedWeights.c5;
+                  subObj.fullScoreTerm2 = (parsedWeights.c6 + parsedWeights.c7 + parsedWeights.c8 + parsedWeights.c9) + parsedWeights.c10;
+                }
+              }
+            }
+          }
+        }
+
+        // Calculated sum helpers
+        const hasPre = (c1 !== null) || (c2 !== null) || (c3 !== null) || (c4 !== null);
+        const sumPre = hasPre ? ((c1 ?? 0) + (c2 ?? 0) + (c3 ?? 0) + (c4 ?? 0)) : g.formative1;
+        const hasPost = (c6 !== null) || (c7 !== null) || (c8 !== null) || (c9 !== null);
+        const sumPost = hasPost ? ((c6 ?? 0) + (c7 ?? 0) + (c8 ?? 0) + (c9 ?? 0)) : g.formative2;
+
         scores[classLevel][subjectId][g.student_id] = {
           studentId: g.student_id,
           formative1: g.formative1,
@@ -765,7 +848,21 @@ export class CloudSyncEngine {
           total2: g.total2,
           yearlyTotal: g.yearly_total,
           grade: g.grade || '-',
-          isPassed: g.is_passed ?? true
+          isPassed: g.is_passed ?? true,
+          c1: c1,
+          c2: c2,
+          c3: c3,
+          c4: c4,
+          c5: c5 !== null ? c5 : g.midterm1,
+          cRetakeMidterm: cRetakeMidterm,
+          c6: c6,
+          c7: c7,
+          c8: c8,
+          c9: c9,
+          c10: c10 !== null ? c10 : g.final2,
+          cSumPre: sumPre,
+          cSumPost: sumPost,
+          cSumFormative: (sumPre !== null && sumPre !== undefined ? sumPre : 0) + (c5 ?? g.midterm1 ?? 0) + (sumPost !== null && sumPost !== undefined ? sumPost : 0)
         };
       });
 
