@@ -920,6 +920,16 @@ export const App: React.FC = () => {
                 ? Number(cloudRec.c5)
                 : (cloudRec.midterm1 ?? localRec?.c5 ?? localRec?.midterm1 ?? null);
 
+              const fallbackC6 = (cloudRec.formative2 !== null && cloudRec.formative2 !== undefined && !cloudRec.c7 && !cloudRec.c8 && !cloudRec.c9)
+                ? Number(cloudRec.formative2)
+                : (localRec?.c6 !== null && localRec?.c6 !== undefined
+                    ? Number(localRec.c6)
+                    : (localRec?.formative2 !== null && localRec?.formative2 !== undefined && !localRec?.c7 && !localRec?.c8 && !localRec?.c9 ? Number(localRec.formative2) : null));
+
+              const resolvedC6 = (cloudRec.c6 !== null && cloudRec.c6 !== undefined)
+                ? Number(cloudRec.c6)
+                : ((localRec?.c6 !== null && localRec?.c6 !== undefined) ? Number(localRec.c6) : fallbackC6);
+
               const resolvedC10 = (cloudRec.c10 !== null && cloudRec.c10 !== undefined)
                 ? Number(cloudRec.c10)
                 : (cloudRec.final2 ?? localRec?.c10 ?? localRec?.final2 ?? null);
@@ -929,17 +939,27 @@ export const App: React.FC = () => {
                 ? ((resolvedC1 ?? 0) + (cloudRec.c2 ?? 0) + (cloudRec.c3 ?? 0) + (cloudRec.c4 ?? 0))
                 : (cloudRec.formative1 ?? localRec?.formative1 ?? null);
 
+              const hasPost = (resolvedC6 !== null) || (cloudRec.c7 !== null) || (cloudRec.c8 !== null) || (cloudRec.c9 !== null);
+              const sumPost = hasPost
+                ? ((resolvedC6 ?? 0) + (cloudRec.c7 ?? 0) + (cloudRec.c8 ?? 0) + (cloudRec.c9 ?? 0))
+                : (cloudRec.formative2 ?? localRec?.formative2 ?? null);
+
               next[cls][subId][stuId] = {
                 ...(localRec || {}),
                 ...cloudRec,
                 c1: resolvedC1,
                 c5: resolvedC5,
+                c6: resolvedC6,
                 c10: resolvedC10,
                 cSumPre: sumPre,
+                cSumPost: sumPost,
+                cSumFormative: (sumPre !== null ? sumPre : 0) + (resolvedC5 ?? 0) + (sumPost !== null ? sumPost : 0),
                 formative1: sumPre,
                 midterm1: resolvedC5,
+                total1: (sumPre !== null || resolvedC5 !== null) ? ((sumPre ?? 0) + (resolvedC5 ?? 0)) : null,
+                formative2: sumPost,
                 final2: resolvedC10,
-                total1: (sumPre !== null || resolvedC5 !== null) ? ((sumPre ?? 0) + (resolvedC5 ?? 0)) : null
+                total2: (sumPost !== null || resolvedC10 !== null) ? ((sumPost ?? 0) + (resolvedC10 ?? 0)) : null
               };
             }
           }

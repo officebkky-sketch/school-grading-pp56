@@ -966,15 +966,22 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                   // Midterm c5
                   const c5 = rec.c5 ?? rec.midterm1 ?? 0;
 
+                  // Smart effective c6 with fallback to formative2 if c6..c9 are empty
+                  const effectiveC6 = rec.c6 !== null && rec.c6 !== undefined
+                    ? rec.c6
+                    : (rec.formative2 !== null && rec.formative2 !== undefined && (rec.c7 === null || rec.c7 === undefined) && (rec.c8 === null || rec.c8 === undefined) && (rec.c9 === null || rec.c9 === undefined)
+                        ? rec.formative2
+                        : null);
+
                   // Sum post (c6..c9)
-                  const hasExplicitPost = (rec.c6 !== null && rec.c6 !== undefined) ||
+                  const hasExplicitPost = (effectiveC6 !== null) ||
                                           (rec.c7 !== null && rec.c7 !== undefined) ||
                                           (rec.c8 !== null && rec.c8 !== undefined) ||
                                           (rec.c9 !== null && rec.c9 !== undefined);
                   const sumPost = rec.cSumPost !== undefined && rec.cSumPost !== null
                     ? rec.cSumPost
                     : (hasExplicitPost
-                        ? ((rec.c6 ?? 0) + (rec.c7 ?? 0) + (rec.c8 ?? 0) + (rec.c9 ?? 0))
+                        ? ((effectiveC6 ?? 0) + (rec.c7 ?? 0) + (rec.c8 ?? 0) + (rec.c9 ?? 0))
                         : (rec.formative2 ?? 0));
 
                   // Sum formative (pre + c5 + post)
@@ -1123,7 +1130,7 @@ export const SubjectMarksheetTab: React.FC<Props> = ({
                           min={0}
                           max={fullScores.c6}
                           disabled={!canEdit || semester === 1}
-                          value={rec.c6 ?? ''}
+                          value={effectiveC6 ?? ''}
                           placeholder={semester === 1 ? "-" : "0"}
                           title={semester === 1 ? "คะแนนหลังกลางภาคจะเปิดให้กรอกในภาคเรียนที่ 2" : `เต็ม ${fullScores.c6}`}
                           onChange={(e) => handleSchoolMisScoreChange(s.studentId, 'c6', e.target.value)}

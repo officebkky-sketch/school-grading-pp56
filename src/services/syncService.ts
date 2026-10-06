@@ -856,16 +856,17 @@ export class CloudSyncEngine {
           }
         }
 
-        // Smart fallback for c1, c5, c10 from legacy summary columns if #MIS: was empty
+        // Smart fallback for c1, c5, c6, c10 from legacy summary columns if #MIS: was empty
         const effectiveC1 = c1 !== null ? c1 : (g.formative1 !== null && g.formative1 !== undefined && c2 === null && c3 === null && c4 === null ? Number(g.formative1) : null);
         const effectiveC5 = c5 !== null ? c5 : (g.midterm1 !== null && g.midterm1 !== undefined ? Number(g.midterm1) : null);
+        const effectiveC6 = c6 !== null ? c6 : (g.formative2 !== null && g.formative2 !== undefined && c7 === null && c8 === null && c9 === null ? Number(g.formative2) : null);
         const effectiveC10 = c10 !== null ? c10 : (g.final2 !== null && g.final2 !== undefined ? Number(g.final2) : null);
 
         // Calculated sum helpers
         const hasPre = (effectiveC1 !== null) || (c2 !== null) || (c3 !== null) || (c4 !== null);
         const sumPre = hasPre ? ((effectiveC1 ?? 0) + (c2 ?? 0) + (c3 ?? 0) + (c4 ?? 0)) : g.formative1;
-        const hasPost = (c6 !== null) || (c7 !== null) || (c8 !== null) || (c9 !== null);
-        const sumPost = hasPost ? ((c6 ?? 0) + (c7 ?? 0) + (c8 ?? 0) + (c9 ?? 0)) : g.formative2;
+        const hasPost = (effectiveC6 !== null) || (c7 !== null) || (c8 !== null) || (c9 !== null);
+        const sumPost = hasPost ? ((effectiveC6 ?? 0) + (c7 ?? 0) + (c8 ?? 0) + (c9 ?? 0)) : g.formative2;
 
         const scoreRecord: StudentScoreRecord = {
           studentId: g.student_id,
@@ -886,7 +887,7 @@ export class CloudSyncEngine {
           c4: c4,
           c5: effectiveC5,
           cRetakeMidterm: cRetakeMidterm,
-          c6: c6,
+          c6: effectiveC6,
           c7: c7,
           c8: c8,
           c9: c9,
